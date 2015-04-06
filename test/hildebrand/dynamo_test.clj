@@ -35,6 +35,7 @@
 
 (def put-item (partial issue!! :put-item))
 (def get-item (partial issue!! :get-item))
+(def del-item (partial issue!! :delete-item))
 
 (def table :hildebrand-test-table)
 (def create-table-default
@@ -43,17 +44,49 @@
    :attrs {:name :S}
    :keys  {:name :hash}})
 
-(defn with-tables [specs f]
+(defn with-tables* [specs f]
   (doseq [{:keys [table] :as spec} specs]
     (when (empty? (issue!! :describe-table {:table table}))
       (issue!! :create-table spec)
       (await-status!! table :active)))
   (f))
 
+(defmacro with-tables [specs & body]
+  `(with-tables* ~specs
+     (fn [] ~@body)))
+
+(defn with-items* [specs f]
+  (with-tables* (keys specs)
+    (fn []
+      (doseq [[{:keys [table]} items] specs]
+        ;; batches, rather
+        (doseq [item items]
+          (put-item {:table table :item item})))
+      (f))))
+
+(defmacro with-items [specs & body]
+  `(with-items* ~specs
+     (fn [] ~@body)))
+
+(def item {:name "Mephistopheles"})
+
 (deftest put+get
   (with-tables [create-table-default]
-    (fn []
-      (put-item {:table table :item {:name "Mephistopheles" :age 33}})
-      (is (= 33
-             (:age (get-item
-                    {:table table :key {:name "Mephistopheles"}})))))))
+    (is (empty? (put-item {:table table :item (assoc item :name 33)})))
+    (is (= 33
+           (:age (get-item
+                  {:table table
+                   :key item
+                   :consistent true}))))))
+
+(deftest delete
+  (with-items {create-table-default [item]}
+    (is (empty? (del-item {:table table :key item})))))
+
+(deftest delete-cc
+  (with-items {create-table-default [item]}
+    (is (= table
+           (->
+            (del-item {:table table :key item :capacity :total})
+            :capacity
+            :table)))))

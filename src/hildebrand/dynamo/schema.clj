@@ -8,11 +8,13 @@
             [plumbing.map]))
 
 (def attr-type #{:S :N :M :SS :NS :BS :L :B :BOOL :NULL})
+(def consumed-capacity #{:indexes :total :none})
 
 (def common-elements
   '{:table-name (str ".+")
     :attr-def   {:attribute-name (str ".+")
                  :attribute-type (pred hildebrand.dynamo.schema/attr-type)}
+    :return-cc (pred hildebrand.dynamo.schema/consumed-capacity)
     :attr-value (& (:= M {(pred hildebrand.dynamo.schema/attr-type)
                           (or (str ".+")
                               [M]
@@ -63,10 +65,20 @@
 
 (def PutItem*
   (interpolate-schema
-   '{:interp/keys* #{:table-name :item}}
+   '{:interp/keys* #{:table-name :item}
+     (* :return-consumed-capacity) :interp/return-cc}
+   common-elements))
+
+(def DeleteItem*
+  (interpolate-schema
+   '{:key {(str+ ".+") :interp/attr-value}
+     (* :return-consumed-capacity) :interp/return-cc
+     :interp/keys* #{:table-name}}
    common-elements))
 
 (def GetItem*
   (interpolate-schema
-   '{:key {(str+ ".+") :interp/attr-value}}
+   '{:key {(str+ ".+") :interp/attr-value}
+     (* :consistent-read) bool
+     :interp/keys* #{:table-name}}
    common-elements))

@@ -94,8 +94,17 @@
    (transform-map
     {:table [:table-name name]
      :key    ->item-spec
-     :capacity :return-consumed-capacity})
+     :capacity :return-consumed-capacity
+     :consistent :consistent-read})
    (schema/conforming schema/GetItem*)))
+
+(def ->delete-item
+  (fn->>
+   (transform-map
+    {:table [:table-name name]
+     :key     ->item-spec
+     :capacity :return-consumed-capacity})
+   (schema/conforming schema/DeleteItem*)))
 
 (defn defmulti-dispatch [method v->handler]
   (doseq [[v handler] v->handler]
@@ -110,6 +119,7 @@
     :put-item       ->put-item
     :delete-table   ->delete-table
     :get-item       ->get-item
+    :delete-item    ->delete-item
     :describe-table ->describe-table}))
 
 (def <-attr-def (juxt :attribute-name :attribute-type))
@@ -155,17 +165,22 @@
 (def <-create-table
   (fn->> :table-description <-table-description-body))
 
+(def <-consumed-capacity
+  (map-transformer
+   {:consumed-capacity
+    [:capacity (partial
+                walk/prewalk-replace
+                {:capacity-units :capacity
+                 :table-name     :table})]}))
+
 (defn <-get-item [{:keys [item] :as resp}]
-  (let [resp (transform-map
-              {:consumed-capacity
-               [:capacity (partial
-                           walk/prewalk-replace
-                           {:capacity-units :capacity
-                            :table-name     :table})]}
-              resp)]
+  (let [resp (<-consumed-capacity resp)]
     (with-meta
       (map-vals (partial apply from-attr-value) item)
       (dissoc resp :item))))
+
+(defn <-delete-item [resp]
+  (<-consumed-capacity resp))
 
 (defmulti  transform-response :target)
 (defmethod transform-response :default [{:keys [body]}] body)
@@ -176,6 +191,7 @@
    {:create-table    <-create-table
     :delete-table    <-create-table
     :get-item        <-get-item
+    :delete-item     <-delete-item
     :describe-table  (fn-> :table <-table-description-body)}))
 
 (defmulti  transform-error (fn [{target :target {:keys [type]} :error}] [target type]))
