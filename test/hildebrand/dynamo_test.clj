@@ -72,7 +72,7 @@
 
 (deftest put+get
   (with-tables [create-table-default]
-    (is (empty? (put-item {:table table :item (assoc item :name 33)})))
+    (is (empty? (put-item {:table table :item (assoc item :age 33)})))
     (is (= 33
            (:age (get-item
                   {:table table
