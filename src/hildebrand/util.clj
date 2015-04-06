@@ -23,14 +23,6 @@
     `(let [~g ~x]
        (cond ~@(cond-> conds else (concat [:else else]))))))
 
-;; this is in glossop
-(defn keyed-map
-  "Like group-by, but assumes unique keys.
-  (keyed-map :foo #(dissoc % :foo) [{:foo 1 :bar 2) {:foo 2 :bar 3}])
-  -> {1 {:bar 2} {2 {:bar 3}}}"
-  ([key-fn s] (keyed-map key-fn identity s))
-  ([key-fn val-fn s] (into {} (map (juxt key-fn val-fn) s))))
-
 (defn key-renamer [spec]
   (fn [m] (set/rename-keys m spec)))
 

@@ -6,6 +6,7 @@
             [eulalie.dynamo]
             [glossop :refer :all :exclude [fn-> fn->>]]
             [hildebrand.dynamo.schema :as schema]
+            [hildebrand.util :refer :all]
             [hildebrand.dynamo.util :refer :all]
             [plumbing.core :refer :all]
             [plumbing.map]))
@@ -86,7 +87,6 @@
    (transform-map
     {:table [:table-name name]
      :item  [:item ->item-spec]})
-   debug-print
    (schema/conforming schema/PutItem*)))
 
 (def ->get-item
@@ -177,3 +177,24 @@
     :delete-table    <-create-table
     :get-item        <-get-item
     :describe-table  (fn-> :table <-table-description-body)}))
+
+(defmulti  transform-error (fn [{target :target {:keys [type]} :error}] [target type]))
+(defmethod transform-error :default [m] m)
+(defmulti-dispatch
+  transform-error
+  {[:describe-table :resource-not-found-exception]
+   (fn-> (assoc :body {}) (dissoc :error))})
+
+(defn issue-request! [creds {:keys [target] :as req}]
+  (go-catching
+    (let [resp (-> (eulalie/issue-request!
+                    eulalie.dynamo/service
+                    creds
+                    (assoc req :content (transform-request req)))
+                   <?
+                   (assoc :target target))]
+      (if (:error resp)
+        (transform-error    resp)
+        (transform-response resp)))))
+
+(def issue-request!! (comp <?! issue-request!))
