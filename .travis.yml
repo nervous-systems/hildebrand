@@ -3,5 +3,5 @@ lein: lein2
 script: lein2 test
 env:
     global:
-        - secure: "IdbXgk7c8eeFClcp3chVxgEW5igiufAYWo7RWP4gpQVOigCdaPc6x07HQL40GpAsR8n/uvJKwO1UIFP00C4wGJTCDl82SmuIykv0NLczENyR8loRU6W8xXwQQhjsNyuFs2IoAqoqdPO7BgNvQyo9N+k8R3r0/Uic3PJ7Xp1Gv8s="
-        - secure: "NJjtmCqg0DnRSP+RX9+Ol5DxEloTI7NgCuHm9cFszG5tvBkc+GLebbhulE6oTXot7zt7bHVECbcRwct7iOHJcz58Tl9bOdCi8bO1yo6/Q0T/dz4ZSrM7Ofn50Yn7sO1bh3J76VkYad6NTiYAmv2S4c8/AwrqkLyiAnYlbpRgkDY="
+        - secure: "IGqRxG4fBSTlYP0yGtpOVWHem3O5GNqutrD5T6fDD/0vVx45nO4ywpjGQIuWMBi/0yetQ3OpYWMvGEHBhmiBOLj8RhTQ9UqIr5eKTWitWUQFsWD8HoL4isUAcUzssvdpmrmAyiSDhdmGiFibUpF9dNBFaZz4exDX1h4lgihE5ds="
+        - secure: "TdiRDWIjneCjsn75Xl4d+Ickdm6juNTiLFztofMiG1eQtKrhep8WjORe9prHuXM0IWbPOF+l0Pe6gWZZq/ggjby3xJfYH6HtfukstpU3blIYBzB/GUqcCu+iszRo0xsU6PrhtKPskFa265lSCprR4rrdz859vinc9HNVYWoakpo="
