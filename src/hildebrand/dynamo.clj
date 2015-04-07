@@ -7,6 +7,7 @@
    [eulalie.dynamo]
    [glossop :refer :all :exclude [fn-> fn->>]]
    [hildebrand.dynamo.schema :as schema]
+   [hildebrand.dynamo.expr :as expr :refer [flatten-expr]]
    [hildebrand.util :refer :all]
    [hildebrand.dynamo.util :refer :all]
    [plumbing.core :refer :all]
@@ -36,16 +37,17 @@
       :else (throw (Exception. "Invalid set type")))))
 
 (defn to-attr-value [v]
-  (branch (branch-> v keyword? fq-name)
-    string?  {:S (throw-empty v)}
-    nil?     {:NULL true}
-    boolean? {:BOOL v}
-    ddb-num? {:N (str v)}
-    vector?  {:L (map to-attr-value v)}
-    map?     {:M (for-map [[k v'] v]
-                   (name k) (to-attr-value v'))}
-    set?     (to-set-attr v)
-    (throw (Exception. (str "Invalid value " (type v))))))
+  (let [v (branch-> v keyword? fq-name)]
+    (branch v
+      string?  {:S (throw-empty v)}
+      nil?     {:NULL true}
+      boolean? {:BOOL v}
+      ddb-num? {:N (str v)}
+      vector?  {:L (map to-attr-value v)}
+      map?     {:M (for-map [[k v'] v]
+                     (name k) (to-attr-value v'))}
+      set?     (to-set-attr v)
+      (throw (Exception. (str "Invalid value " (type v)))))))
 
 (defn key-schema-item [[k v]]
   {:attribute-name (name k)
@@ -83,11 +85,27 @@
   (for-map [[k v] m]
     (name k) (to-attr-value v)))
 
+(defn raise-expression [in-k type req]
+  ;; revisit this structure completely TODO
+  (let [{:keys [attrs values] :as expr}
+        (-> in-k req (assoc :hildebrand/type type))
+        req (if (:hildebrand/expr (req in-k))
+              ;; straight BS
+              (assoc (dissoc req in-k) type (flatten-expr expr))
+              (assoc req type (-> req in-k :expression)))]
+    (cond-> req
+      (not-empty attrs)  (assoc :expression-attribute-names attrs)
+      (not-empty values) (assoc :expression-attribute-values
+                                (for-map [[k v] values]
+                                  k (to-attr-value v))))))
+
 (def ->put-item
   (fn->>
    (transform-map
     {:table [:table-name name]
-     :item  [:item ->item-spec]})
+     :item  [:item ->item-spec]
+     :return :return-values
+     :capacity :return-consumed-capacity})
    (schema/conforming schema/PutItem*)))
 
 (def ->get-item
@@ -99,15 +117,12 @@
      :consistent :consistent-read})
    (schema/conforming schema/GetItem*)))
 
-(defn raise-expression [{{:keys [attrs values expression]} :condition :as m}]
-  (cond-> (dissoc m :condition)
-    (not-empty attrs)
-    (assoc :expression-attribute-names attrs)
-    (not-empty values)
-    (assoc :expression-attribute-values
-           (for-map [[k v] values]
-             k (to-attr-value v)))
-    expression (assoc :condition-expression expression)))
+(def ->update-item
+  (fn->>
+   (transform-map
+    {:table [:table-name name]
+     :key   ->item-spec})
+   (raise-expression :update :update-expression)))
 
 (def ->delete-item
   (fn->>
@@ -116,55 +131,8 @@
      :key     ->item-spec
      :capacity :return-consumed-capacity
      :consistent :consistent-read})
-   raise-expression
+   (raise-expression :condition :condition-expression)
    (schema/conforming schema/DeleteItem*)))
-
-(def functions
-  {'exists      'attribute_exists
-   'not-exists  'attribute_not_exists
-   'begins-with 'begins_with
-   'contains    'contains})
-
-(defn group [& rest]
-  (str "(" (str/join " " rest) ")"))
-
-(defn arglist [xs]
-  (str/join ", " xs))
-
-(defn flatten-expr [e substitutions]
-  (walk/postwalk
-   (fn [l]
-     (if (coll? l)
-       (let [[op & args] l]
-         (cond (functions  op) (str (functions op)  (group (arglist args)))
-               (= 'between op) (let [[x y z] args]  (group x op y 'and z))
-               (= 'in op)      (let [[x & xs] args] (group x op (group (arglist xs))))
-               :else (apply group (interpose op args))))
-       (or (substitutions l) l)))
-   e))
-
-(defn build-expr [expr & [{:keys [values attrs] :or {values {} attrs {}}}]]
-  (let [prefix-keys (fn [prefix m]
-                      (map
-                       (fn [k] [(symbol (name k)) (str prefix (name k))])
-                       (keys m)))]
-
-    {:attrs    (map-keys (fn->> name (str "#")) attrs)
-     :values   (for-map [[k v] values]
-                 (str ":" (name k)) v)
-     :expression (flatten-expr
-                  expr
-                  (into {}
-                    (concat (prefix-keys "#" attrs)
-                            (prefix-keys ":" values))))}))
-
-(defmacro let-expr
-  ([values expr]
-   `(let-expr ~values [] ~expr))
-  ([values attrs expr]
-   (let [->map #(into {} (map (fn [[k v]] `['~k ~v]) (partition 2 %)))]
-     `(let [values# ~(->map values) attrs# ~(->map attrs)]
-        (build-expr (quote ~expr) {:values values# :attrs attrs#})))))
 
 (defn defmulti-dispatch [method v->handler]
   (doseq [[v handler] v->handler]
@@ -180,7 +148,8 @@
     :delete-table   ->delete-table
     :get-item       ->get-item
     :delete-item    ->delete-item
-    :describe-table ->describe-table}))
+    :describe-table ->describe-table
+    :update-item    ->update-item}))
 
 (def <-attr-def (juxt :attribute-name :attribute-type))
 
@@ -239,6 +208,12 @@
       (map-vals (partial apply from-attr-value) item)
       (dissoc resp :item))))
 
+(defn <-put-item [{:keys [attributes] :as resp}]
+  (let [resp (<-consumed-capacity resp)]
+    (with-meta
+      (map-vals (partial apply from-attr-value) attributes)
+      (dissoc resp :attributes))))
+
 (defn <-delete-item [resp]
   (<-consumed-capacity resp))
 
@@ -251,6 +226,7 @@
    {:create-table    <-create-table
     :delete-table    <-create-table
     :get-item        <-get-item
+    :put-item        <-put-item
     :delete-item     <-delete-item
     :describe-table  (fn-> :table <-table-description-body)}))
 
@@ -262,7 +238,6 @@
    (fn-> (assoc :body {}) (dissoc :error))})
 
 (defn issue-request! [creds {:keys [target] :as req}]
-  (clojure.pprint/pprint (transform-request req))
   (go-catching
     (let [resp (-> (eulalie/issue-request!
                     eulalie.dynamo/service

@@ -9,12 +9,14 @@
 
 (def attr-type #{:S :N :M :SS :NS :BS :L :B :BOOL :NULL})
 (def consumed-capacity #{:indexes :total :none})
+(def return-values #{:none :all-old :updated-old :all-new :updated-new})
 
 (def common-elements
   '{:table-name (str ".+")
     :attr-def   {:attribute-name (str ".+")
                  :attribute-type (pred hildebrand.dynamo.schema/attr-type)}
     :return-cc (pred hildebrand.dynamo.schema/consumed-capacity)
+    :return-values (pred hildebrand.dynamo.schema/return-values)
     :attr-value (& (:= M {(pred hildebrand.dynamo.schema/attr-type)
                           (or (str ".+")
                               [M]
@@ -66,7 +68,8 @@
 (def PutItem*
   (interpolate-schema
    '{:interp/keys* #{:table-name :item}
-     (* :return-consumed-capacity) :interp/return-cc}
+     (* :return-consumed-capacity) :interp/return-cc
+     (* :return-values) :interp/return-values}
    common-elements))
 
 (def DeleteItem*

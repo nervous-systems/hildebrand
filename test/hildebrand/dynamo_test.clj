@@ -1,6 +1,6 @@
 (ns hildebrand.dynamo-test
   (:require
-   [hildebrand.dynamo :refer [let-expr]]
+   [hildebrand.dynamo.expr :refer [let-expr]]
    [slingshot.slingshot :refer [throw+ try+]]
    [hildebrand.util :refer :all]
    [glossop :refer [<?! <? go-catching]]
@@ -82,6 +82,18 @@
                   {:table table
                    :key item
                    :consistent true}))))))
+
+(deftest put-returning
+  (with-tables [create-table-default]
+    (let [item' (assoc item :old "put-returning")]
+      (is (empty?  (put-item {:table table :item item'})))
+      (is (= item' (put-item {:table table :item item :return :all-old}))))))
+
+(deftest put-meta
+  (with-tables [create-table-default]
+    (let [item (put-item {:table table :item item :capacity :total})]
+      (is (empty? item))
+      (is (= table (-> item meta :capacity :table))))))
 
 (deftest delete
   (with-items {create-table-default [item]}
