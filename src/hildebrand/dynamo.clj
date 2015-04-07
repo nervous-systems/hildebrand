@@ -1,15 +1,16 @@
 (ns hildebrand.dynamo
-  (:require [clojure.set :as set]
-            [clojure.string :as str]
-            [clojure.walk :as walk]
-            [eulalie]
-            [eulalie.dynamo]
-            [glossop :refer :all :exclude [fn-> fn->>]]
-            [hildebrand.dynamo.schema :as schema]
-            [hildebrand.util :refer :all]
-            [hildebrand.dynamo.util :refer :all]
-            [plumbing.core :refer :all]
-            [plumbing.map]))
+  (:require
+   [clojure.set :as set]
+   [clojure.string :as str]
+   [clojure.walk :as walk]
+   [eulalie]
+   [eulalie.dynamo]
+   [glossop :refer :all :exclude [fn-> fn->>]]
+   [hildebrand.dynamo.schema :as schema]
+   [hildebrand.util :refer :all]
+   [hildebrand.dynamo.util :refer :all]
+   [plumbing.core :refer :all]
+   [plumbing.map]))
 
 (defn join-keywords [& args]
   (some->> args not-empty (map name) str/join keyword))
@@ -98,13 +99,72 @@
      :consistent :consistent-read})
    (schema/conforming schema/GetItem*)))
 
+(defn raise-expression [{{:keys [attrs values expression]} :condition :as m}]
+  (cond-> (dissoc m :condition)
+    (not-empty attrs)
+    (assoc :expression-attribute-names attrs)
+    (not-empty values)
+    (assoc :expression-attribute-values
+           (for-map [[k v] values]
+             k (to-attr-value v)))
+    expression (assoc :condition-expression expression)))
+
 (def ->delete-item
   (fn->>
    (transform-map
     {:table [:table-name name]
      :key     ->item-spec
-     :capacity :return-consumed-capacity})
+     :capacity :return-consumed-capacity
+     :consistent :consistent-read})
+   raise-expression
    (schema/conforming schema/DeleteItem*)))
+
+(def functions
+  {'exists      'attribute_exists
+   'not-exists  'attribute_not_exists
+   'begins-with 'begins_with
+   'contains    'contains})
+
+(defn group [& rest]
+  (str "(" (str/join " " rest) ")"))
+
+(defn arglist [xs]
+  (str/join ", " xs))
+
+(defn flatten-expr [e substitutions]
+  (walk/postwalk
+   (fn [l]
+     (if (coll? l)
+       (let [[op & args] l]
+         (cond (functions  op) (str (functions op)  (group (arglist args)))
+               (= 'between op) (let [[x y z] args]  (group x op y 'and z))
+               (= 'in op)      (let [[x & xs] args] (group x op (group (arglist xs))))
+               :else (apply group (interpose op args))))
+       (or (substitutions l) l)))
+   e))
+
+(defn build-expr [expr & [{:keys [values attrs] :or {values {} attrs {}}}]]
+  (let [prefix-keys (fn [prefix m]
+                      (map
+                       (fn [k] [(symbol (name k)) (str prefix (name k))])
+                       (keys m)))]
+
+    {:attrs    (map-keys (fn->> name (str "#")) attrs)
+     :values   (for-map [[k v] values]
+                 (str ":" (name k)) v)
+     :expression (flatten-expr
+                  expr
+                  (into {}
+                    (concat (prefix-keys "#" attrs)
+                            (prefix-keys ":" values))))}))
+
+(defmacro let-expr
+  ([values expr]
+   `(let-expr ~values [] ~expr))
+  ([values attrs expr]
+   (let [->map #(into {} (map (fn [[k v]] `['~k ~v]) (partition 2 %)))]
+     `(let [values# ~(->map values) attrs# ~(->map attrs)]
+        (build-expr (quote ~expr) {:values values# :attrs attrs#})))))
 
 (defn defmulti-dispatch [method v->handler]
   (doseq [[v handler] v->handler]

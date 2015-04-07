@@ -13,5 +13,6 @@
    [io.nervous/eulalie     "0.1.0-SNAPSHOT"]
    [io.nervous/glossop     "0.1.0-SNAPSHOT"]
    [prismatic/plumbing     "0.4.1"]
+   [slingshot              "0.12.2"]
    [com.velisco/herbert    "0.6.7"]]
   :exclusions [[org.clojure/clojure]])

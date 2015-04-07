@@ -35,7 +35,8 @@
           (fn?      n+t) [k   (n+t v)]
           :else
           (let [[new-name transform] n+t]
-            [new-name (transform v)]))))))
+            [new-name (transform v)]))
+        [k v]))))
 
 (defn map-transformer [spec]
   (partial transform-map spec))
