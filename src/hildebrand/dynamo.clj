@@ -262,6 +262,7 @@
    (fn-> (assoc :body {}) (dissoc :error))})
 
 (defn issue-request! [creds {:keys [target] :as req}]
+  (clojure.pprint/pprint (transform-request req))
   (go-catching
     (let [resp (-> (eulalie/issue-request!
                     eulalie.dynamo/service

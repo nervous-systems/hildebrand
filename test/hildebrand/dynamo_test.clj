@@ -97,34 +97,47 @@
 
 (deftest delete-expected-neg
   (with-items {create-table-default [item]}
-    (is (= :validation-exception
+    (is (= :conditional-check-failed-exception
            (-> (del-item
                 {:table table
                  :key item
-                 :condition {:expression "14 <= age"}}
+                 :condition {:values {":a" 14}
+                             :expression ":a <= age"}}
                 {:throw false})
                :error
                :type)))))
 
 (deftest delete-expected
   (with-items {create-table-default [(assoc item :age 33)]}
-    (is
-     (empty? (del-item
-              {:table table
-               :key item
-               :condition
-               {:values {":a1" 30 ":a2" 33}
-                :expression "age in (:a1, :a2)"}})))))
+    (is (empty? (del-item
+                 {:table table :key item :condition
+                  {:values {":a1" 30 ":a2" 33}
+                   :expression "age in (:a1, :a2)"}})))))
 
 (deftest delete-expected-expr
   (with-items {create-table-default [(assoc item :age 33 :hobby "Strolling")]}
-    (is
-     (empty?
-      (del-item {:table table
-                 :key item
-                 :condition
-                 (let-expr [min 30 max 34 prefix1 "St" prefix2 "Tro"]
-                   (and (<= min age)
-                        (<= age max)
-                        (or (begins-with hobby prefix1)
-                            (begins-with hobby prefix2))))})))))
+    (is (empty?
+         (del-item
+          {:table table :key item :condition
+           (let-expr
+             [min 30 max 34 prefix1 "St" prefix2 "Tro"]
+             [h :hobby]
+             (and (<= min age)
+                  (<= age max)
+                  (or (begins-with h prefix1)
+                      (begins-with h prefix2))))})))))
+
+(deftest delete-expected-expr-neg
+  (with-items {create-table-default [(assoc item :age 33)]}
+    (is (= :conditional-check-failed-exception
+           (-> (del-item
+                {:table table :key item :condition
+                 (let-expr
+                   [min1 10 max1 30 min2 33 max2 40]
+                   (and (or
+                         (between age min1 max1)
+                         (between age min2 max2))
+                        (exists garbage)))}
+                {:throw false})
+               :error
+               :type)))))
