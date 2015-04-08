@@ -1,5 +1,7 @@
 (ns hildebrand.dynamo.expr
-  (:require [clojure.string :as str]
+  (:require [clojure.set :as set]
+            [clojure.string :as str]
+            [hildebrand.util :refer [map-transformer]]
             [clojure.walk :as walk]
             [plumbing.core :refer :all]
             [plumbing.map]))
@@ -13,10 +15,10 @@
 (defmulti flatten-expr (fn [{:keys [hildebrand/type]}] type))
 
 (def functions
-  {'exists      'attribute_exists
-   'not-exists  'attribute_not_exists
-   'begins-with 'begins_with
-   'contains    'contains})
+  '{exists      attribute_exists
+    not-exists  attribute_not_exists
+    begins-with begins_with
+    contains    contains})
 
 (defmethod flatten-expr :condition-expression [{:keys [hildebrand/expr hildebrand/env]}]
   (walk/postwalk
@@ -27,7 +29,7 @@
                (= 'between op) (let [[x y z] args]  (group x op y 'and z))
                (= 'in op)      (let [[x & xs] args] (group x op (group (arglist xs))))
                :else (apply group (interpose op args))))
-       (or (env l) l)))
+       (env l l)))
    ;; There's a single toplevel expression in this case
    (first expr)))
 
@@ -35,9 +37,50 @@
 
 (defmethod flatten-expr :update-expression [{:keys [hildebrand/expr hildebrand/env]}]
   (->> expr
-       (map (fn [[op & args]]
-              (str (update-ops op op) " "  (str/join " " (map #(env % %) args)))))
-       (str/join ", ")))
+       (map (fn [[op & [x y :as args]]]
+              (if (= op 'set)
+                (str "set " (env x x) " = " (env y y))
+                (str (update-ops op op) " "  (str/join " " (map #(env % %) args))))))
+       (str/join " ")))
+
+(defn unprefix-col [x]
+  (when (keyword? x)
+    (let [col (name x)]
+      (when (= "#" (subs col 0 1))
+        (subs col 1)))))
+
+(def process-arglist
+  (partial
+   reduce
+   (fn [{:keys [values args] :as m} arg]
+     (merge-with conj m (if (keyword? arg)
+                          {:args (name arg)}
+                          (let [g (->> (gensym) name (str ":"))]
+                            {:values [g arg] :args g}))))
+   {:args [] :values {}}))
+
+(defmulti  rewrite-funcall (fn [{:keys [op]}] op))
+(defmethod rewrite-funcall :default [m]  m)
+(defmethod rewrite-funcall :set [m]
+  (update m :args (fn [[x & xs]] (into [x '=] xs))))
+
+(defn flatten-funcall [{:keys [op args]}]
+  (into [(name op)] args))
+
+(def build-update-expr
+  (partial
+   reduce
+   (fn [{:keys [values exprs]} [op & op-args]]
+     (let [{values' :values args :args :as m} (process-arglist op-args)
+           funcall {:args args :op (case op :rem :remove :del :delete op)}]
+       {:values (into values values')
+        :exprs  (conj exprs (-> funcall
+                                rewrite-funcall
+                                flatten-funcall))}))
+   {:values {} :exprs []}))
+
+(defn flatten-update-expr [es]
+  (str/join " " (map (partial str/join " ") es)))
 
 (defn prepare-expr [expr & [{:keys [values attrs] :or {values {} attrs {}}}]]
   (let [prefix-keys (fn [prefix m]
@@ -46,8 +89,7 @@
                        (keys m)))]
 
     {:attrs  (map-keys (fn->> name (str "#")) attrs)
-     :values (for-map [[k v] values]
-               (str ":" (name k)) v)
+     :values (map-keys (fn->> name (str ":")) values)
      :hildebrand/expr expr
      :hildebrand/env
      (into {}

@@ -85,7 +85,8 @@
   (for-map [[k v] m]
     (name k) (to-attr-value v)))
 
-(defn raise-expression [in-k type req]
+(defmulti  raise-expression (fn [in-k type+out-k req] in-k))
+(defmethod raise-expression :condition [in-k type req]
   ;; revisit this structure completely TODO
   (let [{:keys [attrs values] :as expr}
         (-> in-k req (assoc :hildebrand/type type))
@@ -93,11 +94,25 @@
               ;; straight BS
               (assoc (dissoc req in-k) type (flatten-expr expr))
               (assoc req type (-> req in-k :expression)))]
+    (println attrs values expr)
     (cond-> req
       (not-empty attrs)  (assoc :expression-attribute-names attrs)
       (not-empty values) (assoc :expression-attribute-values
                                 (for-map [[k v] values]
                                   k (to-attr-value v))))))
+
+(defn raise-update-expression [{:keys [update] :as req}]
+  (let [{:keys [exprs attrs] :as update}
+        (if (map? update)
+          update
+          {:exprs update})
+        {:keys [values exprs]} (expr/build-update-expr exprs)]
+    (cond-> (dissoc req :update)
+      (not-empty values) (assoc :expression-attribute-values
+                                (map-vals to-attr-value values))
+      (not-empty attrs)  (assoc :expression-attribute-names attrs)
+      (not-empty exprs)  (assoc :update-expression
+                                (expr/flatten-update-expr exprs)))))
 
 (def ->put-item
   (fn->>
@@ -121,8 +136,9 @@
   (fn->>
    (transform-map
     {:table [:table-name name]
-     :key   ->item-spec})
-   (raise-expression :update :update-expression)))
+     :key   ->item-spec
+     :return :return-values})
+   raise-update-expression))
 
 (def ->delete-item
   (fn->>
@@ -228,6 +244,7 @@
     :get-item        <-get-item
     :put-item        <-put-item
     :delete-item     <-delete-item
+    :update-item     <-update-item
     :describe-table  (fn-> :table <-table-description-body)}))
 
 (defmulti  transform-error (fn [{target :target {:keys [type]} :error}] [target type]))
@@ -238,6 +255,7 @@
    (fn-> (assoc :body {}) (dissoc :error))})
 
 (defn issue-request! [creds {:keys [target] :as req}]
+  (clojure.pprint/pprint (transform-request req))
   (go-catching
     (let [resp (-> (eulalie/issue-request!
                     eulalie.dynamo/service
