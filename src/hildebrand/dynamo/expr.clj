@@ -33,6 +33,21 @@
    ;; There's a single toplevel expression in this case
    (first expr)))
 
+(defn build-conditional-expr [{:keys [expr values]}]
+  (walk/postwalk
+   (fn [l]
+     (cond
+       (coll? l)
+       (let [[op & args] l]
+         (cond (functions  op) (str (functions op)  (group (arglist args)))
+               (= 'between op) (let [[x y z] args]  (group x op y 'and z))
+               (= 'in op)      (let [[x & xs] args] (group x op (group (arglist xs))))
+               :else (apply group (interpose op args))))
+       (keyword? l) (str l)
+       :else l))
+   ;; There's a single toplevel expression in this case
+   expr))
+
 (def update-ops '{del DELETE rem REMOVE})
 
 (defmethod flatten-expr :update-expression [{:keys [hildebrand/expr hildebrand/env]}]

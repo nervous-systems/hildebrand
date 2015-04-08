@@ -85,21 +85,17 @@
   (for-map [[k v] m]
     (name k) (to-attr-value v)))
 
-(defmulti  raise-expression (fn [in-k type+out-k req] in-k))
-(defmethod raise-expression :condition [in-k type req]
-  ;; revisit this structure completely TODO
-  (let [{:keys [attrs values] :as expr}
-        (-> in-k req (assoc :hildebrand/type type))
-        req (if (:hildebrand/expr (req in-k))
-              ;; straight BS
-              (assoc (dissoc req in-k) type (flatten-expr expr))
-              (assoc req type (-> req in-k :expression)))]
-    (println attrs values expr)
-    (cond-> req
-      (not-empty attrs)  (assoc :expression-attribute-names attrs)
+(defn raise-condition-expression [{:keys [condition] :as req}]
+  (let [{:keys [expr values] :as condition}
+        (if (map? condition)
+          condition
+          {:exprs condition})]
+    (cond-> (dissoc req :condition)
       (not-empty values) (assoc :expression-attribute-values
                                 (for-map [[k v] values]
-                                  k (to-attr-value v))))))
+                                  (str k) (to-attr-value v)))
+      (not-empty expr)  (assoc :condition-expression
+                               (expr/build-condition-expr condition)))))
 
 (defn raise-update-expression [{:keys [update] :as req}]
   (let [{:keys [exprs attrs] :as update}
@@ -147,7 +143,7 @@
      :key     ->item-spec
      :capacity :return-consumed-capacity
      :consistent :consistent-read})
-   (raise-expression :condition :condition-expression)
+   raise-condition-expression
    (schema/conforming schema/DeleteItem*)))
 
 (defn defmulti-dispatch [method v->handler]
