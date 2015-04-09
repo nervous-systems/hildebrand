@@ -1,6 +1,7 @@
 (ns hildebrand.dynamo-test
   (:require
    [hildebrand.dynamo.expr :refer [let-expr]]
+   [hildebrand.dynamo]
    [slingshot.slingshot :refer [throw+ try+]]
    [hildebrand.util :refer :all]
    [glossop :refer [<?! <? go-catching]]
