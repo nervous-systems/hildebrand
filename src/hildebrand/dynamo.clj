@@ -133,14 +133,26 @@
      :capacity :return-consumed-capacity})
    (schema/conforming schema/PutItem*)))
 
+(def get-item-common
+  {:capacity :return-consumed-capacity
+   :attrs [:projection-expression (fn->> (map name) (str/join " "))]
+   :consistent :consistent-read})
+
 (def ->get-item
   (fn->>
    (transform-map
-    {:table [:table-name name]
-     :key    ->item-spec
-     :capacity :return-consumed-capacity
-     :consistent :consistent-read})
+    (merge get-item-common
+           {:table [:table-name name]
+            :key    ->item-spec}))
    (schema/conforming schema/GetItem*)))
+
+(defn ->batch-get [m]
+  {:request-items
+   (for-map [[table req] m]
+     table (transform-map
+            (assoc get-item-common
+                   :keys (mapper ->item-spec))
+            req))})
 
 (def ->update-item
   (fn->>
@@ -177,7 +189,8 @@
     :delete-item    ->delete-item
     :describe-table ->describe-table
     :update-item    ->update-item
-    :batch-write-item ->batch-write}))
+    :batch-write-item ->batch-write
+    :batch-get-item   ->batch-get}))
 
 (def <-attr-def (juxt :attribute-name :attribute-type))
 
@@ -248,13 +261,26 @@
       (map-vals (partial apply from-attr-value) attributes)
       (dissoc resp :attributes))))
 
+(defn error [type message & [data]]
+  (assoc data
+         :hildebrand/error
+         {:type type :message message}))
+
 (defn <-batch-write [{:keys [unprocessed-items] :as resp}]
-  (let [resp (<-consumed-capacity resp)]
-    (with-meta
-      (if (not-empty unprocessed-items)
-        {:unprocessed unprocessed-items}
-        {})
-      (dissoc resp :unprocessed-items))))
+  (if (not-empty unprocessed-items)
+    (error :unprocessed-items
+           (format "%d unprocessed items" (count unprocessed-items))
+           {:unprocessed unprocessed-items})
+    (let [resp (<-consumed-capacity resp)]
+      (with-meta {} resp))))
+
+(defn <-batch-get [{:keys [unprocessed-items] :as resp}]
+  (if (not-empty unprocessed-items)
+    (error :unprocessed-items
+           (format "%d unprocessed items" (count unprocessed-items))
+           {:unprocessed unprocessed-items})
+    (let [resp (<-consumed-capacity resp)]
+      (with-meta {} resp))))
 
 (defn <-delete-item [resp]
   (<-consumed-capacity resp))
@@ -264,34 +290,43 @@
 (defmulti-dispatch
   transform-response
   (map-vals
-   (fn [f] (fn-> :body f))
-   {:create-table      <-create-table
+   #(comp % :body)
+   {:batch-write-item  <-batch-write
+    :batch-get-item    <-batch-get
+    :create-table      <-create-table
     :delete-table      <-create-table
     :get-item          <-get-item
     :put-item          <-put-item
     :delete-item       <-delete-item
     :update-item       <-update-item
-    :batch-write-item  <-batch-write
     :describe-table  (fn-> :table <-table-description-body)}))
 
-(defmulti  transform-error (fn [{target :target {:keys [type]} :error}] [target type]))
-(defmethod transform-error :default [m] m)
+(defmulti  transform-error
+  (fn [{target :target {:keys [type]} :hildebrand/error}] [target type]))
+
+(defmethod transform-error :default [m]
+  (set/rename-keys m {:error :hildebrand/error}))
+
 (defmulti-dispatch
   transform-error
   {[:describe-table :resource-not-found-exception]
-   (fn-> (assoc :body {}) (dissoc :error))})
+   (fn-> (assoc :body {}) (dissoc :hildebrand/error))})
 
 (defn issue-request! [creds {:keys [target] :as req}]
   (clojure.pprint/pprint (transform-request req))
-  (go-catching
-    (let [resp (-> (eulalie/issue-request!
-                    eulalie.dynamo/service
-                    creds
-                    (assoc req :content (transform-request req)))
-                   <?
-                   (assoc :target target))]
-      (if (:error resp)
-        (transform-error    resp)
-        (transform-response resp)))))
+  (let [req (assoc req :creds creds)] ;; TODO move this into eulalie
+    (go-catching
+      (let [resp (-> (eulalie/issue-request!
+                      eulalie.dynamo/service
+                      creds
+                      (assoc req :content (transform-request req)))
+                     <?
+                     (assoc :target target
+                            :hildebrand/request req)
+                     (set/rename-keys {:error :hildebrand/error}))]
+        (if (:hildebrand/error resp)
+          (transform-error resp)
+          (let [resp (transform-response resp)]
+            (branch-> resp :hildebrand/error transform-error)))))))
 
 (def issue-request!! (comp <?! issue-request!))

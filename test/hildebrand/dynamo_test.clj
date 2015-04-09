@@ -15,7 +15,7 @@
 
 (defn issue! [target content & [{:keys [throw] :or {throw true}}]]
   (go-catching
-    (let [{:keys [error] :as resp}
+    (let [{:keys [hildebrand/error] :as resp}
           (<? (hildebrand.dynamo/issue-request!
                creds
                {:target target :max-retries 0 :body content}))]
@@ -129,5 +129,5 @@
                                  (between age :min2 :max2))
                                 (exists garbage))}}
                 {:throw false})
-               :error
+               :hildebrand/error
                :type)))))
