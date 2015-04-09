@@ -91,24 +91,38 @@
           condition
           {:exprs condition})]
     (cond-> (dissoc req :condition)
-      (not-empty values) (assoc :expression-attribute-values
-                                (for-map [[k v] values]
-                                  (str k) (to-attr-value v)))
+      (not-empty values) (update :expression-attribute-values
+                                 merge (for-map [[k v] values]
+                                         (str k) (to-attr-value v)))
       (not-empty expr)  (assoc :condition-expression
                                (expr/build-condition-expr condition)))))
 
-(defn raise-update-expression [{:keys [update] :as req}]
-  (let [{:keys [exprs attrs] :as update}
-        (if (map? update)
-          update
-          {:exprs update})
-        {:keys [values exprs]} (expr/build-update-expr exprs)]
+(defn raise-update-expression [{update' :update :as req}]
+  (let [{:keys [values exprs]} (expr/build-update-expr update')]
     (cond-> (dissoc req :update)
-      (not-empty values) (assoc :expression-attribute-values
-                                (map-vals to-attr-value values))
-      (not-empty attrs)  (assoc :expression-attribute-names attrs)
+      (not-empty values) (update
+                          :expression-attribute-values
+                          merge (map-vals to-attr-value values))
       (not-empty exprs)  (assoc :update-expression
                                 (expr/flatten-update-expr exprs)))))
+
+(defn ->batch-req [type m]
+  (let [m (->item-spec m)]
+    (case type
+      :delete {:delete-request {:key  m}}
+      :put    {:put-request    {:item m}})))
+
+(defn raise-batch-ops [k m]
+  (reduce
+   (fn [m [table ops]]
+     (let [ops (map (partial ->batch-req k) ops)]
+       (update-in m [:request-items table] concat ops)))
+   (dissoc m k) (m k)))
+
+(def ->batch-write
+  (fn->>
+   (raise-batch-ops :delete)
+   (raise-batch-ops :put)))
 
 (def ->put-item
   (fn->>
@@ -134,7 +148,8 @@
     {:table [:table-name name]
      :key   ->item-spec
      :return :return-values})
-   raise-update-expression))
+   raise-update-expression
+   raise-condition-expression))
 
 (def ->delete-item
   (fn->>
@@ -161,7 +176,8 @@
     :get-item       ->get-item
     :delete-item    ->delete-item
     :describe-table ->describe-table
-    :update-item    ->update-item}))
+    :update-item    ->update-item
+    :batch-write-item ->batch-write}))
 
 (def <-attr-def (juxt :attribute-name :attribute-type))
 
@@ -226,6 +242,20 @@
       (map-vals (partial apply from-attr-value) attributes)
       (dissoc resp :attributes))))
 
+(defn <-update-item [{:keys [attributes] :as resp}]
+  (let [resp (<-consumed-capacity resp)]
+    (with-meta
+      (map-vals (partial apply from-attr-value) attributes)
+      (dissoc resp :attributes))))
+
+(defn <-batch-write [{:keys [unprocessed-items] :as resp}]
+  (let [resp (<-consumed-capacity resp)]
+    (with-meta
+      (if (not-empty unprocessed-items)
+        {:unprocessed unprocessed-items}
+        {})
+      (dissoc resp :unprocessed-items))))
+
 (defn <-delete-item [resp]
   (<-consumed-capacity resp))
 
@@ -235,12 +265,13 @@
   transform-response
   (map-vals
    (fn [f] (fn-> :body f))
-   {:create-table    <-create-table
-    :delete-table    <-create-table
-    :get-item        <-get-item
-    :put-item        <-put-item
-    :delete-item     <-delete-item
-    :update-item     <-update-item
+   {:create-table      <-create-table
+    :delete-table      <-create-table
+    :get-item          <-get-item
+    :put-item          <-put-item
+    :delete-item       <-delete-item
+    :update-item       <-update-item
+    :batch-write-item  <-batch-write
     :describe-table  (fn-> :table <-table-description-body)}))
 
 (defmulti  transform-error (fn [{target :target {:keys [type]} :error}] [target type]))

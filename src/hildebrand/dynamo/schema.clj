@@ -18,7 +18,8 @@
     :return-cc (pred hildebrand.dynamo.schema/consumed-capacity)
     :return-values (pred hildebrand.dynamo.schema/return-values)
     :attr-value (& (:= M {(pred hildebrand.dynamo.schema/attr-type)
-                          (or (str ".+")
+                          (or bool
+                              (str ".+")
                               [M]
                               [(str+ ".+")]
                               {(str+ ".+") M})})

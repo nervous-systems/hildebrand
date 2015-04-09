@@ -33,7 +33,7 @@
    ;; There's a single toplevel expression in this case
    (first expr)))
 
-(defn build-conditional-expr [{:keys [expr values]}]
+(defn build-condition-expr [{:keys [expr values]}]
   (walk/postwalk
    (fn [l]
      (cond
@@ -85,9 +85,10 @@
 (def build-update-expr
   (partial
    reduce
-   (fn [{:keys [values exprs]} [op & op-args]]
-     (let [{values' :values args :args :as m} (process-arglist op-args)
-           funcall {:args args :op (case op :rem :remove :del :delete op)}]
+   (fn [{:keys [values exprs]} [attr [op & args]]]
+     (let [args     (into [attr] args)
+           {values' :values args :args :as m} (process-arglist args)
+           funcall  {:args args :op (case op :rem :remove :del :delete op)}]
        {:values (into values values')
         :exprs  (conj exprs (-> funcall
                                 rewrite-funcall
