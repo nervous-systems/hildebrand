@@ -161,10 +161,13 @@
 
 (deftest update-item-concat
   (update-test
-   {:x [1]
-    :y #{1}}
-   {:x [:concat [2]]
-    :y [:concat #{2}]}
-   {:x [1 2]
-    :y #{1 2}}))
+   {:x [1] :y #{1}}
+   {:x [:concat [2]] :y [:concat #{2}]}
+   {:x [1 2] :y #{1 2}}))
+
+(deftest update-item-init
+  (update-test
+   {:y 5}
+   {:x [:init 6] :y [:init 1]}
+   {:y 5 :x 6}))
 

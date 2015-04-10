@@ -80,7 +80,8 @@
         (keyword? arg) (let [[alias arg] (alias-col arg)]
                          {:args alias :attrs [alias arg]})
         :else (let [g (->> (gensym) name (str ":"))]
-                {:values [g arg] :args g}))))
+                {:values [g arg]
+                 :args   g}))))
    {:args [] :values {} :attrs {} :op op}
    args))
 
@@ -90,28 +91,31 @@
 (defn normalize-op-name [op]
   (case op :rem :remove :del :delete op))
 
-(defn merge-concats [{:keys [concat] :as by-op}]
+(defn merge-concats [{:keys [concat] :as by-op} values]
   (dissoc
-   :concat
    (reduce
     (fn [by-op [_ r :as args]]
-      (update by-op (if (set? r) :add :append) conj args))
-    by-op concat)))
+      (let [k (if (-> r values set?) :add :append)]
+        (update by-op k conj args)))
+    by-op concat)
+   :concat))
 
-(defn merge-appends [{:keys [append] :as by-op}]
-  (-> by-op
-      (update :set into
-              (map (fn [[l r]]
-                     [l (format "list_append(%s, %s)" l r)])
-                   append))
-      (dissoc :append)))
+(defn args->call [fn-name [l r]]
+  [l (format "%s(%s, %s)" fn-name l r)])
 
-(defn merge-ops [by-op]
+(defn merge-into-attr-set [k fn-name by-op]
+  (let [ops (by-op k)]
+    (-> by-op
+        (update :set concat (map (partial args->call fn-name) ops))
+        (dissoc k))))
+
+(def merge-appends (partial merge-into-attr-set :append 'list_append))
+(def merge-inits   (partial merge-into-attr-set :init 'if_not_exists))
+
+(defn merge-ops [by-op values]
   (str/join
    " "
-   (for [[op op-arglists] (-> by-op
-                              merge-concats
-                              merge-appends)]
+   (for [[op op-arglists] (-> by-op merge-inits (merge-concats values) merge-appends)]
      (str/join
       " "
       [(name (normalize-op-name op))
@@ -122,7 +126,7 @@
                    :else       (map (partial str/join " ") op-arglists)))]))))
 
 (defn build-update-expr [m]
-  (let [{:keys [calls] :as result}
+  (let [{:keys [calls values] :as result}
         (reduce
          (fn [{:keys [values calls attrs] :as m} [attr [op & args]]]
            (let [args     (into [attr] args)
@@ -133,7 +137,7 @@
          {:values {} :calls {} :attrs {}}
          m)]
     (transform-map
-     {:calls [:exprs merge-ops]}
+     {:calls [:exprs #(merge-ops % values)]}
      result)))
 
 (defn flatten-update-expr [es]
