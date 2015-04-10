@@ -86,7 +86,7 @@
     (name k) (to-attr-value v)))
 
 (defn raise-condition-expression [{:keys [condition] :as req}]
-  (let [{:keys [expr values] :as condition}
+  (let [{:keys [expr values attrs] :as condition}
         (if (map? condition)
           condition
           {:exprs condition})]
@@ -98,13 +98,14 @@
                                (expr/build-condition-expr condition)))))
 
 (defn raise-update-expression [{update' :update :as req}]
-  (let [{:keys [values exprs]} (expr/build-update-expr update')]
+  (let [{:keys [values exprs attrs]}
+        (map-vals not-empty (expr/build-update-expr update'))]
     (cond-> (dissoc req :update)
-      (not-empty values) (update
-                          :expression-attribute-values
-                          merge (map-vals to-attr-value values))
-      (not-empty exprs)  (assoc :update-expression
-                                (expr/flatten-update-expr exprs)))))
+      values (update
+              :expression-attribute-values
+              merge (map-vals to-attr-value values))
+      attrs  (update :expression-attribute-names merge attrs)
+      exprs  (assoc :update-expression exprs))))
 
 (defn ->batch-req [type m]
   (let [m (->item-spec m)]
@@ -325,7 +326,10 @@
                             :hildebrand/request req)
                      (set/rename-keys {:error :hildebrand/error}))]
         (if (:hildebrand/error resp)
-          (transform-error resp)
+          (do
+            ;; TODO response?
+            (clojure.pprint/pprint (-> resp :response :body))
+            (transform-error resp))
           (let [resp (transform-response resp)]
             (branch-> resp :hildebrand/error transform-error)))))))
 

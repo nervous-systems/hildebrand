@@ -1,6 +1,8 @@
 (ns hildebrand.util
   (:require [clojure.set :as set]
-            [plumbing.core :refer :all]))
+            [plumbing.core :refer :all]
+            [clojure.walk :as walk]
+            ))
 
 (defmacro branch-> [x & conds]
   "Short-circuiting cond-> with anaphoric predicates.
@@ -41,5 +43,8 @@
 (defn map-transformer [spec]
   (partial transform-map spec))
 
-(defn mapper [f]
-  (partial map f))
+(defn mapper [& args]
+  (apply partial map args))
+
+(defn reducer [& args]
+  (apply partial reduce args))

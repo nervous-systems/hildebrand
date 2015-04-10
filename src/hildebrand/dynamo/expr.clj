@@ -1,7 +1,7 @@
 (ns hildebrand.dynamo.expr
   (:require [clojure.set :as set]
             [clojure.string :as str]
-            [hildebrand.util :refer [map-transformer]]
+            [hildebrand.util :refer [map-transformer transform-map]]
             [clojure.walk :as walk]
             [plumbing.core :refer :all]
             [plumbing.map]))
@@ -64,36 +64,77 @@
       (when (= "#" (subs col 0 1))
         (subs col 1)))))
 
-(def process-arglist
-  (partial
-   reduce
-   (fn [{:keys [values args] :as m} arg]
-     (merge-with conj m (if (keyword? arg)
-                          {:args (name arg)}
-                          (let [g (->> (gensym) name (str ":"))]
-                            {:values [g arg] :args g}))))
-   {:args [] :values {}}))
+(defn alias-col [x]
+  (let [x (name x)]
+    (if (= "#" (subs x 0 1))
+      [x (subs x 1)]
+      [(str "#" x) x])))
 
-(defmulti  rewrite-funcall (fn [{:keys [op]}] op))
-(defmethod rewrite-funcall :default [m]  m)
-(defmethod rewrite-funcall :set [m]
-  (update m :args (fn [[x & xs]] (into [x '=] xs))))
+
+(defn squish-operation [{:keys [op args]}]
+  (reduce
+   (fn [{:keys [values args attrs] :as m} arg]
+     (merge-with
+      conj m
+      (cond
+        (keyword? arg) (let [[alias arg] (alias-col arg)]
+                         {:args alias :attrs [alias arg]})
+        :else (let [g (->> (gensym) name (str ":"))]
+                {:values [g arg] :args g}))))
+   {:args [] :values {} :attrs {} :op op}
+   args))
 
 (defn flatten-funcall [{:keys [op args]}]
   (into [(name op)] args))
 
-(def build-update-expr
-  (partial
-   reduce
-   (fn [{:keys [values exprs]} [attr [op & args]]]
-     (let [args     (into [attr] args)
-           {values' :values args :args :as m} (process-arglist args)
-           funcall  {:args args :op (case op :rem :remove :del :delete op)}]
-       {:values (into values values')
-        :exprs  (conj exprs (-> funcall
-                                rewrite-funcall
-                                flatten-funcall))}))
-   {:values {} :exprs []}))
+(defn normalize-op-name [op]
+  (case op :rem :remove :del :delete op))
+
+(defn merge-concats [{:keys [concat] :as by-op}]
+  (dissoc
+   :concat
+   (reduce
+    (fn [by-op [_ r :as args]]
+      (update by-op (if (set? r) :add :append) conj args))
+    by-op concat)))
+
+(defn merge-appends [{:keys [append] :as by-op}]
+  (-> by-op
+      (update :set into
+              (map (fn [[l r]]
+                     [l (format "list_append(%s, %s)" l r)])
+                   append))
+      (dissoc :append)))
+
+(defn merge-ops [by-op]
+  (str/join
+   " "
+   (for [[op op-arglists] (-> by-op
+                              merge-concats
+                              merge-appends)]
+     (str/join
+      " "
+      [(name (normalize-op-name op))
+       (str/join ", "
+                 (cond
+                   (= op :set) (map (partial str/join " = ") op-arglists)
+                   (= op :rem) (flatten op-arglists)
+                   :else       (map (partial str/join " ") op-arglists)))]))))
+
+(defn build-update-expr [m]
+  (let [{:keys [calls] :as result}
+        (reduce
+         (fn [{:keys [values calls attrs] :as m} [attr [op & args]]]
+           (let [args     (into [attr] args)
+                 {:keys [args op] :as out} (squish-operation {:op op :args args})]
+             {:values (into values (:values out))
+              :calls  (update calls op conj args)
+              :attrs  (into attrs (:attrs out))}))
+         {:values {} :calls {} :attrs {}}
+         m)]
+    (transform-map
+     {:calls [:exprs merge-ops]}
+     result)))
 
 (defn flatten-update-expr [es]
   (str/join " " (map (partial str/join " ") es)))

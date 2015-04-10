@@ -8,6 +8,7 @@
    [eulalie]
    [eulalie.dynamo]
    [clojure.test :refer :all]
+   [plumbing.core :refer :all]
    [clojure.core.async :as async]))
 
 (def creds
@@ -41,6 +42,7 @@
 (def put-item (partial issue!! :put-item))
 (def get-item (partial issue!! :get-item))
 (def del-item (partial issue!! :delete-item))
+(def update-item (partial issue!! :update-item))
 
 (def table :hildebrand-test-table)
 (def create-table-default
@@ -132,3 +134,37 @@
                 {:throw false})
                :hildebrand/error
                :type)))))
+
+(defn update-test [attrs-in updates attrs-out]
+  (let [keyed-item (merge item attrs-in)
+        expected   (merge item attrs-out)]
+   (with-items {create-table-default [keyed-item]}
+     (is (= expected
+            (update-item
+             {:table table :key item :update updates :return :all-new}))))))
+
+(deftest update-item-only
+  (update-test
+   {:hobbies #{"eating" "sleeping"}
+    :bad     "good"}
+   {:nick    [:set "Rodrigo"]
+    :hobbies [:add #{"dreaming"}]
+    :bad     [:rem]}
+   {:nick    "Rodrigo"
+    :hobbies #{"eating" "sleeping" "dreaming"}}))
+
+(deftest update-item-list
+  (update-test
+   {:x [1 2 3]}
+   {:x [:append ["4"]]}
+   {:x [1 2 3 "4"]}))
+
+(deftest update-item-concat
+  (update-test
+   {:x [1]
+    :y #{1}}
+   {:x [:concat [2]]
+    :y [:concat #{2}]}
+   {:x [1 2]
+    :y #{1 2}}))
+
