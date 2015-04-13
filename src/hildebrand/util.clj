@@ -1,8 +1,15 @@
 (ns hildebrand.util
   (:require [clojure.set :as set]
             [plumbing.core :refer :all]
-            [clojure.walk :as walk]
-            ))
+            [clojure.walk :as walk]))
+
+;; Experiments, mostly
+
+(defmacro if-> [test val then else]
+  `(let [val# ~val]
+     (if ~test
+       (-> val# ~then)
+       (-> val# ~else))))
 
 (defmacro branch-> [x & conds]
   "Short-circuiting cond-> with anaphoric predicates.
@@ -23,7 +30,7 @@
         else  (when (odd? (count conds)) (last conds))
         conds (mapcat (fn [[l r]] `((~l ~x) ~r)) (partition 2 conds))]
     `(let [~g ~x]
-       (cond ~@(cond-> conds else (concat [:else else]))))))
+       (cond ~@conds :else ~else))))
 
 (defn key-renamer [spec]
   (fn [m] (set/rename-keys m spec)))
@@ -48,3 +55,7 @@
 
 (defn reducer [& args]
   (apply partial reduce args))
+
+(defn defmulti-dispatch [method v->handler]
+  (doseq [[v handler] v->handler]
+    (defmethod method v [& args] (apply handler args))))

@@ -1,10 +1,10 @@
 (ns hildebrand.dynamo.expr
   (:require [clojure.set :as set]
             [clojure.string :as str]
-            [hildebrand.util :refer [map-transformer transform-map]]
+            [hildebrand.util :refer :all]
             [clojure.walk :as walk]
             [plumbing.core :refer :all]
-            [plumbing.map]))
+            [plumbing.map :refer [keyword-map]]))
 
 (defn group [& rest]
   (str "(" (str/join " " rest) ")"))
@@ -167,3 +167,93 @@
 (defmacro let-expr [& rest]
   (let [[bindings expr] (split-with vector? rest)]
     `(prepare-expr (quote ~expr) (bindings->map* ~@bindings))))
+
+(defn flatten-update-ops [m & [{:keys [path acc] :or {path [] acc []}}]]
+  (loop [[[k v :as kv] & m] (seq m) acc acc]
+    (let [path (conj path k)]
+      (cond
+        (nil? kv)   acc
+        (map? v)    (recur m (flatten-update-ops v {:path path :acc acc}))
+        (vector? v) (let [[op & args] v]
+                      (recur m (conj acc (into [op path] args))))))))
+
+(def alias-attr (fn->> name (str "#")))
+
+(defn parameterize-op [{:keys [op-name col path arg] :as op}]
+  (let [{aliased-col :col :as op} (update op :col alias-attr)
+        attrs {aliased-col (name col)}]
+    (if (keyword? arg)
+      [op {:attrs (assoc attrs (alias-attr arg) (name arg))}]
+      (let [g (->> (gensym) name (str ":"))]
+        [(assoc op :arg g)
+         {:attrs attrs
+          :values {g arg}}]))))
+
+(defn explode-op [[op-name [col & path] arg :as op]]
+  (keyword-map op-name col path arg))
+
+(defn arg->call [fn-name col arg]
+  (format "%s(%s, %s)" fn-name col arg))
+
+(defn new-op-name [op op-name]
+  (assoc op :op-name op-name))
+
+(defn op->set [fn-name {:keys [col] :as op} params]
+  (-> op
+      (new-op-name :set)
+      (update :args (partial arg->call fn-name col))))
+
+(defmulti  rewrite-op (fn [{:keys [op-name]} params] op-name))
+(defmethod rewrite-op :default [op params] op)
+(defmulti-dispatch
+  rewrite-op
+  {:append (partial op->set 'list_append)
+   :init   (partial op->set 'if_not_exists)})
+
+(defmethod rewrite-op :concat [{:keys [arg] :as op} params]
+  (if (set? arg)
+    (new-op-name op :add)
+    (-> op (new-op-name :append) rewrite-op)))
+
+(defn parameterize-ops [ops]
+  (let [[ops param-maps]
+        (->> ops
+             (map (fn->> explode-op parameterize-op))
+             (apply map vector))
+        params (apply merge-with into param-maps)]
+    [(map #(rewrite-op % params) ops) params]))
+
+(let [aliases {:rem :remove :del :delete}]
+  (defn normalize-op-name [op]
+    (-> op (aliases op) name)))
+
+(defn col+path->string [[col & path]]
+  (reduce
+   (fn [acc part]
+     (if (integer? part)
+       (str acc "[" part "]")
+       (str acc "." (name part))))
+   (str col) path))
+
+(defn op->vector [{:keys [op-name col path arg]}]
+  [(normalize-op-name op-name) (col+path->string (into [col] path)) arg])
+
+(defmulti  op->string (fn [op-name op] op-name))
+(defmethod op->string :default [_ [op-name col+path arg]]
+  (str/join " " [op-name col+path arg]))
+(defmethod op->string :set [_ [op-name col+path arg]]
+  (str/join " " [op-name col+path '= arg]))
+
+(defn ops->string [by-op]
+  (str/join
+   " "
+   (for [[op ops] by-op]
+     (str/join " " (map (fn->> op->vector (op->string op)) ops)))))
+
+(defn update-ops->statement [m]
+  (let [[ops {:keys [attrs values] :as params}]
+        (-> m
+            flatten-update-ops
+            parameterize-ops)
+        ops (group-by :op-name ops)]
+    (assoc params :expr (ops->string ops))))

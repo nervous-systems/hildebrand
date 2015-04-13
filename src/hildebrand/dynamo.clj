@@ -174,10 +174,6 @@
    raise-condition-expression
    (schema/conforming schema/DeleteItem*)))
 
-(defn defmulti-dispatch [method v->handler]
-  (doseq [[v handler] v->handler]
-    (defmethod method v [& args] (apply handler args))))
-
 (defmulti transform-request :target)
 (defmulti-dispatch
   transform-request
