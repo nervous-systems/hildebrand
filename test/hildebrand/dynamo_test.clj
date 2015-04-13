@@ -139,7 +139,9 @@
   (let [keyed-item (merge item attrs-in)
         expected   (merge item attrs-out)]
     (with-items {create-table-default [keyed-item]}
-      (is (= expected (update-item {:table table :key item :update updates :return :all-new}))))))
+      (is (= expected
+             (update-item
+              {:table table :key item :update updates :return :all-new}))))))
 
 (deftest update-item-only
   (update-test
@@ -204,3 +206,17 @@
    {:a {:b [{:c :d}]}}
    {:a {:b {0 [:remove]}}}
    {:a {:b []}}))
+
+(def items
+  (for [i (range 5)]
+    (assoc item :name (str "batch-write-" i))))
+
+(deftest batch-write
+  (is (empty? (issue!! :batch-write-item {:put {table items}}))))
+
+(deftest batch-write+get
+  (issue!! :batch-write-item {:put {table items}})
+  (let [responses (issue!!
+                   :batch-get-item
+                   {table {:consistent true :keys items}})]
+    (is (= (into #{} items) (into #{} (responses table))))))

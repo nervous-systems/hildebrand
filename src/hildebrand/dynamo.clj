@@ -271,13 +271,16 @@
     (let [resp (<-consumed-capacity resp)]
       (with-meta {} resp))))
 
-(defn <-batch-get [{:keys [unprocessed-items] :as resp}]
+(defn <-batch-get [{:keys [unprocessed-items responses] :as resp}]
   (if (not-empty unprocessed-items)
     (error :unprocessed-items
            (format "%d unprocessed items" (count unprocessed-items))
            {:unprocessed unprocessed-items})
     (let [resp (<-consumed-capacity resp)]
-      (with-meta {} resp))))
+      (with-meta (for-map [[t items] responses]
+                   t (for [item items]
+                       (map-vals (partial apply from-attr-value) item)))
+        resp))))
 
 (defn <-delete-item [resp]
   (<-consumed-capacity resp))
