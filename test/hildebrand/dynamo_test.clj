@@ -138,10 +138,8 @@
 (defn update-test [attrs-in updates attrs-out]
   (let [keyed-item (merge item attrs-in)
         expected   (merge item attrs-out)]
-   (with-items {create-table-default [keyed-item]}
-     (is (= expected
-            (update-item
-             {:table table :key item :update updates :return :all-new}))))))
+    (with-items {create-table-default [keyed-item]}
+      (is (= expected (update-item {:table table :key item :update updates :return :all-new}))))))
 
 (deftest update-item-only
   (update-test
@@ -176,3 +174,33 @@
    {:y 5 :z 5}
    {:y [:remove] :z [:remove]}
    {}))
+
+(deftest update-item-nested-set
+  (update-test
+   {:a [:b]}
+   {:a {0 [:set "c"]}}
+   {:a ["c"]}))
+
+(deftest update-item-deeply-nested-set
+  (update-test
+   {:a ["b" "c" {:d ["e"]}]}
+   {:a {2 {:d {0 [:set "f"]}}}}
+   {:a ["b" "c" {:d ["f"]}]}))
+
+(deftest update-item-nested-init
+  (update-test
+   {:a {:b "c"}}
+   {:a {:b [:init "d"] :B [:init "D"]}}
+   {:a {:b "c" :B "D"}}))
+
+(deftest update-item-nested-append
+  (update-test
+   {:a {:b [["c"]]}}
+   {:a {:b {0 [:concat ["d"]]}}}
+   {:a {:b [["c" "d"]]}}))
+
+(deftest update-item-nested-remove
+  (update-test
+   {:a {:b [{:c :d}]}}
+   {:a {:b {0 [:remove]}}}
+   {:a {:b []}}))

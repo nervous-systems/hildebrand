@@ -192,16 +192,25 @@
 (defn explode-op [[op-name [col & path] arg :as op]]
   (keyword-map op-name col path arg))
 
+(defn col+path->string [[col & path]]
+  (reduce
+   (fn [acc part]
+     (if (integer? part)
+       (str acc "[" part "]")
+       (str acc "." (name part))))
+   (str col) path))
+
 (defn arg->call [fn-name col arg]
   (format "%s(%s, %s)" fn-name col arg))
 
 (defn new-op-name [op op-name]
   (assoc op :op-name op-name))
 
-(defn op->set [fn-name {:keys [col] :as op} params]
-  [(-> op
-       (new-op-name :set)
-       (update :arg (partial arg->call fn-name col))) params])
+(defn op->set [fn-name {:keys [col path] :as op} params]
+  (let [col+path (col+path->string (into [col] path))]
+    [(-> op
+         (new-op-name :set)
+         (update :arg (partial arg->call fn-name col+path))) params]))
 
 (defmulti  rewrite-op (fn [{:keys [op-name]} params] op-name))
 (defmethod rewrite-op :default [op params] [op params])
@@ -224,14 +233,6 @@
              (map (fn->> explode-op parameterize-op (apply rewrite-op)))
              (apply map vector))]
     [ops (apply merge-with into param-maps)]))
-
-(defn col+path->string [[col & path]]
-  (reduce
-   (fn [acc part]
-     (if (integer? part)
-       (str acc "[" part "]")
-       (str acc "." (name part))))
-   (str col) path))
 
 (defn op->vector [{:keys [op-name col path arg]}]
   (cond-> [(name op-name) (col+path->string (into [col] path))]
