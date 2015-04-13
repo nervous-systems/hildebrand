@@ -174,12 +174,17 @@
    raise-condition-expression
    (schema/conforming schema/DeleteItem*)))
 
+(def ->list-tables
+  (map-transformer
+   {:start-table [:exclusive-start-table-name]}))
+
 (defmulti transform-request :target)
 (defmulti-dispatch
   transform-request
   (map-vals
    (fn [f] (fn-> :body f))
-   {:create-table   ->create-table
+   {:list-tables    ->list-tables
+    :create-table   ->create-table
     :put-item       ->put-item
     :delete-table   ->delete-table
     :get-item       ->get-item
@@ -285,13 +290,17 @@
 (defn <-delete-item [resp]
   (<-consumed-capacity resp))
 
+(defn <-list-tables [{:keys [last-evaluated-table-name table-names]}]
+  (with-meta table-names {:start-table last-evaluated-table-name}))
+
 (defmulti  transform-response :target)
 (defmethod transform-response :default [{:keys [body]}] body)
 (defmulti-dispatch
   transform-response
   (map-vals
    #(comp % :body)
-   {:batch-write-item  <-batch-write
+   {:list-tables       <-list-tables
+    :batch-write-item  <-batch-write
     :batch-get-item    <-batch-get
     :create-table      <-create-table
     :delete-table      <-create-table
@@ -307,11 +316,6 @@
 (defmethod transform-error :default [m]
   (set/rename-keys m {:error :hildebrand/error}))
 
-(defmulti-dispatch
-  transform-error
-  {[:describe-table :resource-not-found-exception]
-   (fn-> (assoc :body {}) (dissoc :hildebrand/error))})
-
 (defn issue-request! [creds {:keys [target] :as req}]
   (clojure.pprint/pprint (transform-request req))
   (let [req (assoc req :creds creds)] ;; TODO move this into eulalie
@@ -321,6 +325,7 @@
                       creds
                       (assoc req :content (transform-request req)))
                      <?
+                     (dissoc :request)
                      (assoc :target target
                             :hildebrand/request req)
                      (set/rename-keys {:error :hildebrand/error}))]

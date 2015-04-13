@@ -53,9 +53,13 @@
 
 (defn with-tables* [specs f]
   (doseq [{:keys [table] :as spec} specs]
-    (when (empty? (issue!! :describe-table {:table table}))
-      (issue!! :create-table spec)
-      (await-status!! table :active)))
+    (let [{:keys [hildebrand/error]} (issue!! :describe-table {:table table} {:throw false})]
+      (cond (= (:type error) :resource-not-found-exception)
+            (do
+              (issue!! :create-table spec)
+              (await-status!! table :active))
+            error (throw+ error)
+            :else nil)))
   (f))
 
 (defmacro with-tables [specs & body]
@@ -76,6 +80,14 @@
      (fn [] ~@body)))
 
 (def item {:name "Mephistopheles"})
+
+(deftest list-tables
+  (with-tables [create-table-default
+                (assoc create-table-default
+                       :table :hildebrand-test-table-list-tables)]
+    (let [tables (issue!! :list-tables {:limit 1})]
+      (is (= 1 (count tables)))
+      (is (-> tables meta :start-table)))))
 
 (deftest put+get
   (with-tables [create-table-default]
