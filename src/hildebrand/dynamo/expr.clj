@@ -199,33 +199,31 @@
   (assoc op :op-name op-name))
 
 (defn op->set [fn-name {:keys [col] :as op} params]
-  (-> op
-      (new-op-name :set)
-      (update :args (partial arg->call fn-name col))))
+  [(-> op
+       (new-op-name :set)
+       (update :arg (partial arg->call fn-name col))) params])
 
 (defmulti  rewrite-op (fn [{:keys [op-name]} params] op-name))
-(defmethod rewrite-op :default [op params] op)
+(defmethod rewrite-op :default [op params] [op params])
 (defmulti-dispatch
   rewrite-op
   {:append (partial op->set 'list_append)
    :init   (partial op->set 'if_not_exists)})
 
-(defmethod rewrite-op :concat [{:keys [arg] :as op} params]
-  (if (set? arg)
-    (new-op-name op :add)
-    (-> op (new-op-name :append) rewrite-op)))
+(defmethod rewrite-op :concat [{:keys [arg] :as op} {:keys [values] :as params}]
+  (if (set? (values arg))
+    [(new-op-name op :add) params]
+    (-> op (new-op-name :append) (rewrite-op params))))
+
+(defmethod rewrite-op :remove [{:keys [arg] :as op} params]
+  [(assoc op :arg :hildebrand/no-arg) (dissoc-in params [:values arg])])
 
 (defn parameterize-ops [ops]
   (let [[ops param-maps]
         (->> ops
-             (map (fn->> explode-op parameterize-op))
-             (apply map vector))
-        params (apply merge-with into param-maps)]
-    [(map #(rewrite-op % params) ops) params]))
-
-(let [aliases {:rem :remove :del :delete}]
-  (defn normalize-op-name [op]
-    (-> op (aliases op) name)))
+             (map (fn->> explode-op parameterize-op (apply rewrite-op)))
+             (apply map vector))]
+    [ops (apply merge-with into param-maps)]))
 
 (defn col+path->string [[col & path]]
   (reduce
@@ -236,19 +234,30 @@
    (str col) path))
 
 (defn op->vector [{:keys [op-name col path arg]}]
-  [(normalize-op-name op-name) (col+path->string (into [col] path)) arg])
+  (cond-> [(name op-name) (col+path->string (into [col] path))]
+    (not= arg :hildebrand/no-arg) (conj arg)))
 
 (defmulti  op->string (fn [op-name op] op-name))
 (defmethod op->string :default [_ [op-name col+path arg]]
-  (str/join " " [op-name col+path arg]))
-(defmethod op->string :set [_ [op-name col+path arg]]
-  (str/join " " [op-name col+path '= arg]))
+  (str/join " " [col+path arg]))
+(defmethod op->string :remove [_ [op-name col+path]]
+  col+path)
+
+(defmulti  op-group->string (fn [op-name ops] op-name))
+(defmethod op-group->string :default [op-name ops]
+  (str (name op-name) " "
+       (str/join ", " (map (fn->> op->vector (op->string op-name)) ops))))
+(defmethod op-group->string :set [op-name ops]
+  (str "set "
+       (str/join ", "
+                 (for [op ops :let [[_ col+path arg] (op->vector op)]]
+                   (str col+path " = " arg)))))
 
 (defn ops->string [by-op]
   (str/join
    " "
    (for [[op ops] by-op]
-     (str/join " " (map (fn->> op->vector (op->string op)) ops)))))
+     (op-group->string op ops))))
 
 (defn update-ops->statement [m]
   (let [[ops {:keys [attrs values] :as params}]

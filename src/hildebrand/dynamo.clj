@@ -98,14 +98,14 @@
                                (expr/build-condition-expr condition)))))
 
 (defn raise-update-expression [{update' :update :as req}]
-  (let [{:keys [values exprs attrs]}
-        (map-vals not-empty (expr/build-update-expr update'))]
+  (let [{:keys [values expr attrs]}
+        (map-vals not-empty (expr/update-ops->statement update'))]
     (cond-> (dissoc req :update)
       values (update
               :expression-attribute-values
               merge (map-vals to-attr-value values))
       attrs  (update :expression-attribute-names merge attrs)
-      exprs  (assoc :update-expression exprs))))
+      expr   (assoc :update-expression expr))))
 
 (defn ->batch-req [type m]
   (let [m (->item-spec m)]

@@ -149,7 +149,7 @@
     :bad     "good"}
    {:nick    [:set "Rodrigo"]
     :hobbies [:add #{"dreaming"}]
-    :bad     [:rem]}
+    :bad     [:remove]}
    {:nick    "Rodrigo"
     :hobbies #{"eating" "sleeping" "dreaming"}}))
 
@@ -170,3 +170,9 @@
    {:y 5}
    {:x [:init 6] :y [:init 1]}
    {:y 5 :x 6}))
+
+(deftest update-item-remove
+  (update-test
+   {:y 5 :z 5}
+   {:y [:remove] :z [:remove]}
+   {}))
