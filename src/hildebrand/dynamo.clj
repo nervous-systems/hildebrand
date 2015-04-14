@@ -63,6 +63,38 @@
   {:attribute-name (name k)
    :attribute-type v})
 
+(defn ->projection [[tag & [arg]]]
+  (cond-> {:projection-type tag}
+    arg (assoc :non-key-attributes arg)))
+
+(def ->key-schema
+  (fn->>
+   (sort-by val) ;; :hash, then :range
+   (map key-schema-item)))
+
+(def index-common
+  {:name :index-name
+   :keys [:key-schema ->key-schema]
+   :project [:projection ->projection]})
+
+(def ->gs-index
+  (map-transformer
+   (assoc index-common
+          :throughput [:provisioned-throughput
+                       (fn->> (merge default-throughput) ->throughput)])))
+
+(def ->ls-index
+  (map-transformer index-common))
+
+(defn raise-create-indexes [{{:keys [global local]} :indexes :as req}]
+  (cond-> (dissoc req :indexes)
+    (not-empty global) (assoc
+                        :global-secondary-indexes
+                        (map ->gs-index global))
+    (not-empty local) (assoc
+                       :local-secondary-indexes
+                       (map ->ls-index local))))
+
 (def ->create-table
   (fn->>
    (transform-map
@@ -70,7 +102,8 @@
      :throughput [:provisioned-throughput
                   (fn->> (merge default-throughput) ->throughput)]
      :attrs [:attribute-definitions (partial map ->attr-value)]
-     :keys [:key-schema (partial map key-schema-item)]})
+     :keys [:key-schema ->key-schema]})
+   raise-create-indexes
    (schema/conforming schema/CreateTable*)))
 
 (def ->delete-table
@@ -124,6 +157,21 @@
   (fn->>
    (raise-batch-ops :delete)
    (raise-batch-ops :put)))
+
+(defn ->key-conds [conds]
+  (for-map [[col [op & args]] conds]
+    col {:attribute-value-list (map to-attr-value args)
+         :comparison-operator op}))
+
+(def ->query
+  (fn->>
+   (transform-map
+    {:index :index-name
+     :table :table-name
+     :conds [:key-conditions ->key-conds]
+     :attrs [:projection-expression (fn->> (map name) (str/join " "))]
+     :consistent :consistent-read
+     :sort [:scan-index-forward (partial = :asc)]})))
 
 (def ->put-item
   (fn->>
@@ -183,7 +231,8 @@
   transform-request
   (map-vals
    (fn [f] (fn-> :body f))
-   {:list-tables    ->list-tables
+   {:query          ->query
+    :list-tables    ->list-tables
     :create-table   ->create-table
     :put-item       ->put-item
     :delete-table   ->delete-table
@@ -276,6 +325,8 @@
     (let [resp (<-consumed-capacity resp)]
       (with-meta {} resp))))
 
+(def <-item (partial map-vals (partial apply from-attr-value)))
+
 (defn <-batch-get [{:keys [unprocessed-items responses] :as resp}]
   (if (not-empty unprocessed-items)
     (error :unprocessed-items
@@ -283,8 +334,7 @@
            {:unprocessed unprocessed-items})
     (let [resp (<-consumed-capacity resp)]
       (with-meta (for-map [[t items] responses]
-                   t (for [item items]
-                       (map-vals (partial apply from-attr-value) item)))
+                   t (map <-item items))
         resp))))
 
 (defn <-delete-item [resp]
@@ -292,6 +342,9 @@
 
 (defn <-list-tables [{:keys [last-evaluated-table-name table-names]}]
   (with-meta table-names {:start-table last-evaluated-table-name}))
+
+(defn <-query [resp]
+  (update resp :items (mapper <-item)))
 
 (defmulti  transform-response :target)
 (defmethod transform-response :default [{:keys [body]}] body)
@@ -308,7 +361,8 @@
     :put-item          <-put-item
     :delete-item       <-delete-item
     :update-item       <-update-item
-    :describe-table  (fn-> :table <-table-description-body)}))
+    :describe-table    (fn-> :table <-table-description-body)
+    :query             <-query}))
 
 (defmulti  transform-error
   (fn [{target :target {:keys [type]} :hildebrand/error}] [target type]))
