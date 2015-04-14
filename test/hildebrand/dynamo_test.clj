@@ -126,22 +126,23 @@
     (is (empty?
          (del-item
           {:table table :key item :condition
-           {:values {:min 30 :max 34 :prefix1 "St" :prefix2 "Tro"}
-            :expr   '(and (<= :min age)
-                          (<= age :max)
-                          (or (begins-with hobby :prefix1)
-                              (begins-with hobby :prefix2)))}})))))
+           [:and
+            [:<= 30 :#age]
+            [:<= :#age 34]
+            [:or
+             [:begins-with :#hobby "St"]
+             [:begins-with :#hobby "Tro"]]]})))))
 
 (deftest delete+expected-expr-neg
   (with-items {create-table-default [(assoc item :age 33)]}
     (is (= :conditional-check-failed-exception
            (-> (del-item
                 {:table table :key item :condition
-                 {:values {:min1 10 :max1 30 :min2 33 :max2 40}
-                  :expr   '(and (or
-                                 (between age :min1 :max1)
-                                 (between age :min2 :max2))
-                                (exists garbage))}}
+                 [:and
+                  [:or
+                   [:between :#age 10 30]
+                   [:between :#age 33 40]]
+                  [:exists :#garbage]]}
                 {:throw false})
                :hildebrand/error
                :type)))))
@@ -239,7 +240,7 @@
     (is (= [{:name "Mephistopheles"}]
            (map #(select-keys % #{:name})
                 (:items (query {:table table
-                                :conds {:name [:eq "Mephistopheles"]}})))))))
+                                :where {:name [:eq "Mephistopheles"]}})))))))
 
 (def indexed-table :hildebrand-test-table-indexed)
 (def local-index   :hildebrand-test-table-indexed-local)
@@ -254,13 +255,20 @@
       :keys {:user-id :hash :timestamp :range}
       :project [:include [:data]]}]}})
 
-(def game-item (partial zipmap [:user-id :game-title :timestamp :data]))
+(def ->game-item (partial zipmap [:user-id :game-title :timestamp :data]))
+(def indexed-items (map ->game-item [["moe" "Super Metroid" 1 "great"] ["moe" "Wii Fit" 2]]))
 
 (deftest query+local-index
-  (let [items (map game-item [["moe" "Super Metroid" 1 "great"] ["moe" "Wii Fit" 2]])]
-    (with-items {create-table-indexed items}
-      (is (= [(first items)]
-             (:items (query {:table indexed-table
-                             :index local-index
-                             :conds {:user-id   [:eq "moe"]
-                                     :timestamp [:lt 2]}})))))))
+  (with-items {create-table-indexed indexed-items}
+    (is (= [(first indexed-items)]
+           (:items (query {:table indexed-table
+                           :index local-index
+                           :where {:user-id   [:eq "moe"]
+                                   :timestamp [:lt 2]}}))))))
+
+(deftest query+filter
+  (with-items {create-table-indexed indexed-items}
+    (is (= [(first indexed-items)]
+           (:items (query {:table indexed-table
+                           :where {:user-id   [:eq "moe"]}
+                           :filter [:< :#timestamp 2]}))))))

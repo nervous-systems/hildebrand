@@ -267,3 +267,59 @@
             parameterize-ops)
         ops (group-by :op-name ops)]
     (assoc params :expr (ops->string ops))))
+
+(def logical-ops #{:and :or :not})
+
+(def prefix-ops
+  {:begins-with :begins_with
+   :not-exists  :attribute_not_exists
+   :exists      :attribute_exists
+   :contains    :contains})
+
+(defn column-arg? [a]
+  (and (keyword? a) (-> a name (subs 0 1) (= "#"))))
+
+(defn parameterize-arg [arg]
+  (if (column-arg? arg)
+    {:args [(name arg)] :attrs {(name arg) (unprefix-col arg)}}
+    (let [g (->> (gensym) name (str ":"))]
+      {:args [g] :values {g arg}})))
+
+(defn map-merge [f v]
+  (->> v (map f) (apply merge-with into)))
+
+(defn parameterize-args [args]
+  (let [m (map-merge parameterize-arg args)]
+    [(:args m) (dissoc m :args)]))
+
+(defn parameterize-expr [[op & args]]
+  (if (logical-ops op)
+    (let [[sub-ops param-maps] (apply map vector (map parameterize-expr args))
+          params               (apply merge-with into param-maps)]
+      [(into [op] sub-ops) params])
+    (let [[args params] (parameterize-args args)]
+      [(into [op] args) params])))
+
+(defmulti  cond-expr-op->string (fn [[op & args]] op))
+(defmethod cond-expr-op->string :default [[op & args]]
+  (apply group (interpose (name op) args)))
+(defmethod cond-expr-op->string :between [[op x y z]]
+  (group x (name op) y 'and z))
+(defmethod cond-expr-op->string :in [[op x & xs]]
+  (group x (name op) (group (arglist xs))))
+(defmethod cond-expr-op->string :not [[op arg]]
+  (group 'not arg))
+(defmulti-dispatch cond-expr-op->string
+  (for-map [[in-op out-op] prefix-ops]
+    in-op (fn [[_ & args]] (str (name out-op) (group (arglist args))))))
+
+(defn cond-expr->string [expr]
+  (walk/postwalk
+   (fn [form]
+     (cond-> form
+       (coll? form) cond-expr-op->string))
+   expr))
+
+(defn cond-expr->statement [expr]
+  (let [[expr params] (parameterize-expr expr)]
+    (assoc params :expr (cond-expr->string expr))))

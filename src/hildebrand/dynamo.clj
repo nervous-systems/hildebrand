@@ -118,27 +118,35 @@
   (for-map [[k v] m]
     (name k) (to-attr-value v)))
 
-(defn raise-condition-expression [{:keys [condition] :as req}]
-  (let [{:keys [expr values attrs] :as condition}
-        (if (map? condition)
-          condition
-          {:exprs condition})]
-    (cond-> (dissoc req :condition)
-      (not-empty values) (update :expression-attribute-values
-                                 merge (for-map [[k v] values]
-                                         (str k) (to-attr-value v)))
-      (not-empty expr)  (assoc :condition-expression
-                               (expr/build-condition-expr condition)))))
+(defn ->item [m]
+  (for-map [[k v] m]
+    (name k) (to-attr-value v)))
+
+(defn raise-condition-expression
+  [req & [{:keys [out-key in-key] :or {out-key :condition-expression
+                                       in-key  :condition}}]]
+  (if-let [{:keys [expr values attrs]}
+           (some-> in-key req not-empty expr/cond-expr->statement)]
+    (cond-> (-> req (dissoc in-key) (assoc out-key expr))
+      (not-empty values) (update
+                          :expression-attribute-values
+                          merge (->item values))
+      (not-empty attrs)  (update
+                          :expression-attribute-names
+                          merge attrs))
+    req))
 
 (defn raise-update-expression [{update' :update :as req}]
-  (let [{:keys [values expr attrs]}
-        (map-vals not-empty (expr/update-ops->statement update'))]
-    (cond-> (dissoc req :update)
-      values (update
-              :expression-attribute-values
-              merge (map-vals to-attr-value values))
-      attrs  (update :expression-attribute-names merge attrs)
-      expr   (assoc :update-expression expr))))
+  (if (not-empty update')
+    (let [{:keys [values expr attrs]}
+          (map-vals not-empty (expr/update-ops->statement update'))]
+      (cond-> (dissoc req :update)
+        values (update
+                :expression-attribute-values
+                merge (map-vals to-attr-value values))
+        attrs  (update :expression-attribute-names merge attrs)
+        expr   (assoc :update-expression expr)))
+    req))
 
 (defn ->batch-req [type m]
   (let [m (->item-spec m)]
@@ -163,15 +171,19 @@
     col {:attribute-value-list (map to-attr-value args)
          :comparison-operator op}))
 
-(def ->query
-  (fn->>
-   (transform-map
-    {:index :index-name
-     :table :table-name
-     :conds [:key-conditions ->key-conds]
-     :attrs [:projection-expression (fn->> (map name) (str/join " "))]
-     :consistent :consistent-read
-     :sort [:scan-index-forward (partial = :asc)]})))
+(defn ->query [m]
+  (let [m (transform-map
+           {:index :index-name
+            :table :table-name
+            :where [:key-conditions ->key-conds]
+            :attrs [:projection-expression (fn->> (map name) (str/join " "))]
+            :consistent :consistent-read
+            :sort [:scan-index-forward (partial = :asc)]}
+           m)]
+    (raise-condition-expression
+     m
+     {:in-key :filter
+      :out-key :filter-expression})))
 
 (def ->put-item
   (fn->>
