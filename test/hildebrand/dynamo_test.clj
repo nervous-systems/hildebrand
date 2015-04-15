@@ -119,6 +119,7 @@
     (is (= table
            (->
             (del-item {:table table :key item :capacity :total})
+            meta
             :capacity
             :table)))))
 
