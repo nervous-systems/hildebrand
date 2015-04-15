@@ -166,10 +166,12 @@
    (raise-batch-ops :delete)
    (raise-batch-ops :put)))
 
+(def comparison-ops {:< :lt :<= :le := :eq :> :gt :>= :ge})
+
 (defn ->key-conds [conds]
   (for-map [[col [op & args]] conds]
     col {:attribute-value-list (map to-attr-value args)
-         :comparison-operator op}))
+         :comparison-operator (comparison-ops op op)}))
 
 (defn ->query [m]
   (let [m (transform-map
@@ -268,10 +270,9 @@
     :last-increase-date-time :last-increase
     :last-decrease-date-time :last-decrease}))
 
-(def <-projection
-  (key-renamer
-   {:non-key-attributes :attrs
-    :projection-type    :type}))
+(defn <-projection [{attrs :non-key-attributes type :projection-type}]
+  (cond-> [type]
+    (not-empty attrs) (conj attrs)))
 
 (def <-global-index
   (map-transformer
@@ -280,20 +281,31 @@
     :index-status :status
     :item-count :count
     :key-schema [:keys <-key-schema]
-    :projection <-projection
+    :projection [:project <-projection]
     :provisioned-throughput [:throughput <-throughput]}))
 
 ;; that bidirectional transformation function though
 
+(defn raise-indexes [{:keys [global-indexes local-indexes] :as req}]
+  (-> req
+      (dissoc :global-indexes :local-indexes)
+      (assoc :indexes {:global global-indexes
+                       :local  local-indexes})))
+
 (def <-table-description-body
-  (map-transformer
-   {:attribute-definitions [:attrs (fn->> (map <-attr-def) (into {}))]
-    :key-schema [:keys <-key-schema]
-    :provisioned-throughput [:throughput <-throughput]
-    :table-status :status
-    :table-size-byes :size
-    :creation-date-time :created
-    :global-secondary-indexes [:global-indexes (mapper <-global-index)]}))
+  (fn->>
+   (transform-map
+    {:table-name :table
+     :attribute-definitions [:attrs (fn->> (map <-attr-def) (into {}))]
+     :key-schema [:keys <-key-schema]
+     :provisioned-throughput [:throughput <-throughput]
+     :table-status :status
+     :table-size-bytes :size
+     :item-count :items
+     :creation-date-time :created
+     :global-secondary-indexes [:global-indexes (mapper <-global-index)]
+     :local-secondary-indexes  [:local-indexes  (mapper <-global-index)]})
+   raise-indexes))
 
 (def <-create-table
   (fn->> :table-description <-table-description-body))

@@ -9,7 +9,8 @@
    [eulalie.dynamo]
    [clojure.test :refer :all]
    [plumbing.core :refer :all]
-   [clojure.core.async :as async]))
+   [clojure.core.async :as async]
+   [clojure.walk :as walk]))
 
 (def creds
   {:access-key (get (System/getenv) "AWS_ACCESS_KEY")
@@ -39,12 +40,13 @@
 (def issue!!        (comp <?! issue!))
 (def await-status!! (comp <?! await-status!))
 
-(def put-item    (partial issue!! :put-item))
-(def get-item    (partial issue!! :get-item))
-(def del-item    (partial issue!! :delete-item))
-(def update-item (partial issue!! :update-item))
-(def batch-write (partial issue!! :batch-write-item))
-(def query       (partial issue!! :query))
+(def put-item       (partial issue!! :put-item))
+(def get-item       (partial issue!! :get-item))
+(def del-item       (partial issue!! :delete-item))
+(def update-item    (partial issue!! :update-item))
+(def batch-write    (partial issue!! :batch-write-item))
+(def query          (partial issue!! :query))
+(def describe-table (partial issue!! :describe-table))
 
 (def table :hildebrand-test-table)
 (def create-table-default
@@ -244,6 +246,8 @@
 
 (def indexed-table :hildebrand-test-table-indexed)
 (def local-index   :hildebrand-test-table-indexed-local)
+(def global-index  :hildebrand-test-table-indexed-global)
+
 (def create-table-indexed
   {:table indexed-table
    :throughput {:read 1 :write 1}
@@ -253,22 +257,51 @@
    {:local
     [{:name local-index
       :keys {:user-id :hash :timestamp :range}
-      :project [:include [:data]]}]}})
+      :project [:include [:data]]}]
+    :global
+    [{:name global-index
+      :keys {:game-title :hash :timestamp :range}
+      :project [:keys-only]
+      :throughput {:read 1 :write 1}}]}})
 
 (def ->game-item (partial zipmap [:user-id :game-title :timestamp :data]))
-(def indexed-items (map ->game-item [["moe" "Super Metroid" 1 "great"] ["moe" "Wii Fit" 2]]))
+(def indexed-items (map ->game-item [["moe" "Super Metroid" 1 "great"]
+                                     ["moe" "Wii Fit" 2]]))
 
 (deftest query+local-index
   (with-items {create-table-indexed indexed-items}
     (is (= [(first indexed-items)]
            (:items (query {:table indexed-table
                            :index local-index
-                           :where {:user-id   [:eq "moe"]
-                                   :timestamp [:lt 2]}}))))))
+                           :where {:user-id   [:= "moe"]
+                                   :timestamp [:< 2]}}))))))
 
 (deftest query+filter
   (with-items {create-table-indexed indexed-items}
     (is (= [(first indexed-items)]
            (:items (query {:table indexed-table
-                           :where {:user-id   [:eq "moe"]}
+                           :where {:user-id [:= "moe"]}
                            :filter [:< :#timestamp 2]}))))))
+
+(deftest query+global-index
+  (with-items {create-table-indexed indexed-items}
+    (is (= [(-> indexed-items first (dissoc :data))]
+           (:items (query {:table indexed-table
+                           :index global-index
+                           :where {:game-title [:= "Super Metroid"]
+                                   :timestamp  [:< 2]}}))))))
+
+(def cleanup-description
+  (partial
+   walk/postwalk
+   (fn [x]
+     (cond
+       (map?  x) (dissoc x :items :size :status :created :decreases :count)
+       (coll? x) (vec x)
+       :else     x))))
+
+(deftest describe-complex-table
+  (with-tables [create-table-indexed]
+    (is (= create-table-indexed
+           (-> (describe-table {:table indexed-table})
+               cleanup-description)))))
