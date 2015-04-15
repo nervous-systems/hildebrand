@@ -96,9 +96,7 @@
     (is (empty? (put-item {:table table :item (assoc item :age 33)})))
     (is (= 33
            (:age (get-item
-                  {:table table
-                   :key item
-                   :consistent true}))))))
+                  {:table table :key item :consistent true}))))))
 
 (deftest put+returning
   (with-tables [create-table-default]

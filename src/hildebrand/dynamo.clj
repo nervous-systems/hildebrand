@@ -331,23 +331,13 @@
                 {:capacity-units :capacity
                  :table-name     :table})]}))
 
-(defn <-get-item [{:keys [item] :as resp}]
-  (let [resp (<-consumed-capacity resp)]
-    (with-meta
-      (map-vals (partial apply from-attr-value) item)
-      (dissoc resp :item))))
+(def <-item (partial map-vals (partial apply from-attr-value)))
 
-(defn <-put-item [{:keys [attributes] :as resp}]
+(defn <-wrapped-item [item-k resp]
   (let [resp (<-consumed-capacity resp)]
     (with-meta
-      (map-vals (partial apply from-attr-value) attributes)
-      (dissoc resp :attributes))))
-
-(defn <-update-item [{:keys [attributes] :as resp}]
-  (let [resp (<-consumed-capacity resp)]
-    (with-meta
-      (map-vals (partial apply from-attr-value) attributes)
-      (dissoc resp :attributes))))
+      (-> resp item-k <-item)
+      (dissoc resp item-k))))
 
 (defn error [type message & [data]]
   (assoc data
@@ -361,8 +351,6 @@
            {:unprocessed unprocessed-items})
     (let [resp (<-consumed-capacity resp)]
       (with-meta {} resp))))
-
-(def <-item (partial map-vals (partial apply from-attr-value)))
 
 (defn <-batch-get [{:keys [unprocessed-items responses] :as resp}]
   (if (not-empty unprocessed-items)
@@ -394,10 +382,10 @@
     :batch-get-item    <-batch-get
     :create-table      <-create-table
     :delete-table      <-create-table
-    :get-item          <-get-item
-    :put-item          <-put-item
-    :delete-item       <-delete-item
-    :update-item       <-update-item
+    :get-item          (partial <-wrapped-item :item)
+    :put-item          (partial <-wrapped-item :attributes)
+    :update-item       (partial <-wrapped-item :attributes)
+    :delete-item       (partial <-wrapped-item :attributes)
     :describe-table    (fn-> :table <-table-description-body)
     :update-table      (fn-> :table-description <-table-description-body)
     :query             <-query}))
