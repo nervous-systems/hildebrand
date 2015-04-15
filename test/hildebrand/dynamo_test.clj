@@ -47,6 +47,7 @@
 (def batch-write    (partial issue!! :batch-write-item))
 (def query          (partial issue!! :query))
 (def describe-table (partial issue!! :describe-table))
+(def update-table   (partial issue!! :update-table))
 
 (def table :hildebrand-test-table)
 (def create-table-default
@@ -247,6 +248,11 @@
 (def indexed-table :hildebrand-test-table-indexed)
 (def local-index   :hildebrand-test-table-indexed-local)
 (def global-index  :hildebrand-test-table-indexed-global)
+(def create-global-index
+  {:name global-index
+   :keys {:game-title :hash :timestamp :range}
+   :project [:keys-only]
+   :throughput {:read 1 :write 1}})
 
 (def create-table-indexed
   {:table indexed-table
@@ -259,10 +265,7 @@
       :keys {:user-id :hash :timestamp :range}
       :project [:include [:data]]}]
     :global
-    [{:name global-index
-      :keys {:game-title :hash :timestamp :range}
-      :project [:keys-only]
-      :throughput {:read 1 :write 1}}]}})
+    [create-global-index]}})
 
 (def ->game-item (partial zipmap [:user-id :game-title :timestamp :data]))
 (def indexed-items (map ->game-item [["moe" "Super Metroid" 1 "great"]

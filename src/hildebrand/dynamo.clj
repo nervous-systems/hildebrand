@@ -236,6 +236,18 @@
    raise-condition-expression
    (schema/conforming schema/DeleteItem*)))
 
+(defn ->index-updates [updates]
+  (for [[tag m] updates]
+    {tag (->gs-index m)}))
+
+(def ->update-table
+  (fn->>
+   (transform-map
+    {:table :table-name
+     :attrs [:attribute-definitions (mapper ->attr-value)]
+     :throughput [:provisioned-throughput ->throughput]
+     :indexes [:global-secondary-index-updates ->index-updates]})))
+
 (def ->list-tables
   (map-transformer
    {:start-table [:exclusive-start-table-name]}))
@@ -255,7 +267,8 @@
     :describe-table ->describe-table
     :update-item    ->update-item
     :batch-write-item ->batch-write
-    :batch-get-item   ->batch-get}))
+    :batch-get-item   ->batch-get
+    :update-table     ->update-table}))
 
 (def <-attr-def (juxt :attribute-name :attribute-type))
 
@@ -386,6 +399,7 @@
     :delete-item       <-delete-item
     :update-item       <-update-item
     :describe-table    (fn-> :table <-table-description-body)
+    :update-table      (fn-> :table-description <-table-description-body)
     :query             <-query}))
 
 (defmulti  transform-error
