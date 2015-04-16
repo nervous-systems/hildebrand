@@ -187,14 +187,17 @@
      {:in-key :filter
       :out-key :filter-expression})))
 
-(def ->put-item
-  (fn->>
-   (transform-map
-    {:table [:table-name name]
-     :item  [:item ->item-spec]
-     :return :return-values
-     :capacity :return-consumed-capacity})
-   (schema/conforming schema/PutItem*)))
+(defn ->put-item [m]
+  (let [m
+        (transform-map
+         {:table [:table-name name]
+          :item  [:item ->item-spec]
+          :return :return-values
+          :capacity :return-consumed-capacity} m)]
+    (raise-condition-expression
+     m
+     {:in-key :condition
+      :out-key :condition-expression})))
 
 (def get-item-common
   {:capacity :return-consumed-capacity

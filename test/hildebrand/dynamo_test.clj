@@ -98,6 +98,14 @@
            (:age (get-item
                   {:table table :key item :consistent true}))))))
 
+(deftest put+conditional
+  (is (= :conditional-check-failed-exception
+         (-> (put-item {:table table
+                        :item item
+                        :condition [:not-exists :#name]} {:throw false})
+             :hildebrand/error
+             :type))))
+
 (deftest put+returning
   (with-tables [create-table-default]
     (let [item' (assoc item :old "put-returning")]
