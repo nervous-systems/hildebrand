@@ -70,7 +70,6 @@
       [x (subs x 1)]
       [(str "#" x) x])))
 
-
 (defn squish-operation [{:keys [op args]}]
   (reduce
    (fn [{:keys [values args attrs] :as m} arg]

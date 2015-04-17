@@ -53,8 +53,8 @@
 (def create-table-default
   {:table table
    :throughput {:read 1 :write 1}
-   :attrs {:name :S}
-   :keys  {:name :hash}})
+   :attrs {:name :string}
+   :keys  [:name]})
 
 (defn with-tables* [specs f]
   (doseq [{:keys [table] :as spec} specs]
@@ -102,7 +102,7 @@
   (is (= :conditional-check-failed-exception
          (-> (put-item {:table table
                         :item item
-                        :condition [:not-exists :#name]} {:throw false})
+                        :when [:not-exists :#name]} {:throw false})
              :hildebrand/error
              :type))))
 
@@ -242,7 +242,7 @@
     (issue!! :batch-write-item {:put {table items}})
     (let [responses (issue!!
                      :batch-get-item
-                     {table {:consistent true :keys items}})]
+                     {:items {table {:consistent true :keys items}}})]
       (is (= (into #{} items) (into #{} (responses table)))))))
 
 (deftest query+
@@ -257,19 +257,19 @@
 (def global-index  :hildebrand-test-table-indexed-global)
 (def create-global-index
   {:name global-index
-   :keys {:game-title :hash :timestamp :range}
+   :keys [:game-title :timestamp]
    :project [:keys-only]
    :throughput {:read 1 :write 1}})
 
 (def create-table-indexed
   {:table indexed-table
    :throughput {:read 1 :write 1}
-   :attrs {:user-id :S    :game-title :S     :timestamp :N}
-   :keys  {:user-id :hash :game-title :range}
+   :attrs {:user-id :string :game-title :string :timestamp :number}
+   :keys  [:user-id :game-title]
    :indexes
    {:local
     [{:name local-index
-      :keys {:user-id :hash :timestamp :range}
+      :keys [:user-id :timestamp]
       :project [:include [:data]]}]
     :global
     [create-global-index]}})

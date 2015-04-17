@@ -49,28 +49,38 @@
       set?     (to-set-attr v)
       (throw (Exception. (str "Invalid value " (type v)))))))
 
-(defn key-schema-item [[k v]]
-  {:attribute-name (name k)
-   :key-type       v})
-
-(def default-throughput {:read 1 :write 1})
-
 (def ->throughput
-  (key-renamer {:read  :read-capacity-units
-                :write :write-capacity-units}))
+  (map-transformer {:read :read-capacity-units
+                    :write :write-capacity-units}))
+
+(def type-aliases-out
+  {:string     :S
+   :number     :N
+   :list       :L
+   :binary     :B
+   :number-set :NS
+   :string-set :SS
+   :binary-set :BS
+   :map        :M
+   :null       :NULL
+   :boolean    :BOOL})
+
+(def type-aliases-in
+  (for-map [[k v] type-aliases]
+    v k))
 
 (defn ->attr-value [[k v]]
   {:attribute-name (name k)
-   :attribute-type v})
+   :attribute-type (type-aliases-out v v)})
 
 (defn ->projection [[tag & [arg]]]
   (cond-> {:projection-type tag}
     arg (assoc :non-key-attributes arg)))
 
 (def ->key-schema
-  (fn->>
-   (sort-by val) ;; :hash, then :range
-   (map key-schema-item)))
+  (mapper (fn [t attr]
+            {:attribute-name (name attr)
+             :key-type t}) [:hash :range]))
 
 (def index-common
   {:name :index-name
@@ -81,7 +91,7 @@
   (map-transformer
    (assoc index-common
           :throughput [:provisioned-throughput
-                       (fn->> (merge default-throughput) ->throughput)])))
+                       ->throughput])))
 
 (def ->ls-index
   (map-transformer index-common))
@@ -98,9 +108,9 @@
 (def ->create-table
   (fn->>
    (transform-map
-    {:table [:table-name name]
+    {:name [:table-name name]
      :throughput [:provisioned-throughput
-                  (fn->> (merge default-throughput) ->throughput)]
+                  ->throughput]
      :attrs [:attribute-definitions (partial map ->attr-value)]
      :keys [:key-schema ->key-schema]})
    raise-create-indexes
@@ -164,7 +174,9 @@
 (def ->batch-write
   (fn->>
    (raise-batch-ops :delete)
-   (raise-batch-ops :put)))
+   (raise-batch-ops :put)
+   (transform-map {:capacity :return-consumed-capacity
+                   :metrics  :return-item-collection-metrics})))
 
 (def comparison-ops {:< :lt :<= :le := :eq :> :gt :>= :ge})
 
@@ -193,39 +205,52 @@
          {:table [:table-name name]
           :item  [:item ->item-spec]
           :return :return-values
-          :capacity :return-consumed-capacity} m)]
+          :capacity :return-consumed-capacity
+          :metrics  :return-item-collection-metrics} m)]
     (raise-condition-expression
      m
-     {:in-key :condition
+     {:in-key :when
       :out-key :condition-expression})))
 
-(def get-item-common
-  {:capacity :return-consumed-capacity
-   :attrs [:projection-expression (fn->> (map name) (str/join " "))]
-   :consistent :consistent-read})
+(defn raise-projection-expression [{:keys [project] :as m}]
+  (cond-> (dissoc m :project)
+    (not-empty project)
+    (assoc :expression-attribute-names
+           (for-map [attr project]
+             attr (expr/unprefix-col attr))
+           :projection-expression
+           project)))
+
+(def ->get-item-common
+  (fn->>
+   raise-projection-expression
+   (transform-map {:consistent :consistent-read})))
 
 (def ->get-item
   (fn->>
+   ->get-item-common
    (transform-map
-    (merge get-item-common
-           {:table [:table-name name]
-            :key    ->item-spec}))
-   (schema/conforming schema/GetItem*)))
+    {:table [:table-name name]
+     :key    ->item-spec
+     :capacity :return-consumed-capacity})))
 
-(defn ->batch-get [m]
-  {:request-items
-   (for-map [[table req] m]
-     table (transform-map
-            (assoc get-item-common
-                   :keys (mapper ->item-spec))
-            req))})
+(def ->batch-get
+  (map-transformer
+   {:items [:request-items
+            (partial map-vals
+                     (fn->>
+                      ->get-item-common
+                      (transform-map {:keys (mapper ->item-spec)})))]
+    :capacity :return-consumed-capacity}))
 
 (def ->update-item
   (fn->>
    (transform-map
     {:table [:table-name name]
      :key   ->item-spec
-     :return :return-values})
+     :return :return-values
+     :capacity :return-consumed-capacity
+     :metrics  :return-item-collection-metrics})
    raise-update-expression
    raise-condition-expression))
 
@@ -273,10 +298,12 @@
     :batch-get-item   ->batch-get
     :update-table     ->update-table}))
 
-(def <-attr-def (juxt :attribute-name :attribute-type))
+(defn <-attr-def [{:keys [attribute-name attribute-type]}]
+  [attribute-name (type-aliases-in attribute-type attribute-type)])
 
 (def <-key-schema
-  (partial keyed-map :attribute-name :key-type))
+  (fn->> (sort-by :key-type)
+         (map :attribute-name)))
 
 (def <-throughput
   (key-renamer
