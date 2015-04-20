@@ -1,7 +1,10 @@
 (ns hildebrand.dynamo-test
   (:require
    [hildebrand.dynamo.expr :refer [let-expr]]
-   [hildebrand.dynamo]
+   [hildebrand.dynamo :refer
+    [put-item!! get-item!! delete-item!! update-item!! query!!
+     describe-table! describe-table!! create-table!! update-table!!
+     list-tables!!]]
    [slingshot.slingshot :refer [throw+ try+]]
    [hildebrand.util :refer :all]
    [glossop :refer [<?! <? go-catching]]
@@ -10,7 +13,8 @@
    [clojure.test :refer :all]
    [plumbing.core :refer :all]
    [clojure.core.async :as async]
-   [clojure.walk :as walk]))
+   [clojure.walk :as walk])
+  (:import [clojure.lang ExceptionInfo]))
 
 (def creds
   {:access-key (get (System/getenv) "AWS_ACCESS_KEY")
@@ -29,7 +33,7 @@
 (defn await-status! [table status]
   (go-catching
     (loop []
-      (let [status' (-> (issue! :describe-table {:table table}) <? :status)]
+      (let [status' (-> (describe-table! creds table) <? :status)]
         (cond (nil? status')     nil
               (= status status') status'
               :else (do
@@ -38,15 +42,7 @@
 
 (def issue!!        (comp <?! issue!))
 (def await-status!! (comp <?! await-status!))
-
-(def put-item       (partial issue!! :put-item))
-(def get-item       (partial issue!! :get-item))
-(def del-item       (partial issue!! :delete-item))
-(def update-item    (partial issue!! :update-item))
 (def batch-write    (partial issue!! :batch-write-item))
-(def query          (partial issue!! :query))
-(def describe-table (partial issue!! :describe-table))
-(def update-table   (partial issue!! :update-table))
 
 (def table :hildebrand-test-table)
 (def create-table-default
@@ -57,13 +53,13 @@
 
 (defn with-tables* [specs f]
   (doseq [{:keys [table] :as spec} specs]
-    (let [{:keys [hildebrand/error]} (issue!! :describe-table {:table table} {:throw false})]
-      (cond (= (:type error) :resource-not-found-exception)
-            (do
-              (issue!! :create-table spec)
-              (await-status!! table :active))
-            error (throw+ error)
-            :else nil)))
+    (try
+      (describe-table!! creds table)
+      (catch ExceptionInfo e
+        (when-not (= :resource-not-found-exception (-> e ex-data :type))
+          (throw e))
+        (create-table!! creds spec)
+        (await-status!! table :active))))
   (f))
 
 (defmacro with-tables [specs & body]
@@ -86,46 +82,44 @@
   (with-tables [create-table-default
                 (assoc create-table-default
                        :table :hildebrand-test-table-list-tables)]
-    (let [{:keys [tables] :as r} (issue!! :list-tables {:limit 1})]
+    (let [{:keys [tables] :as r} (list-tables!! creds {:limit 1})]
       (is (= 1 (count tables)))
       (is (-> r meta :start-table)))))
 
 (deftest put+get
   (with-tables [create-table-default]
-    (is (empty? (put-item {:table table :item (assoc item :age 33)})))
-    (is (= 33
-           (:age (get-item
-                  {:table table :key item :consistent true}))))))
+    (is (empty? (put-item!! creds table (assoc item :age 33))))
+    (is (= 33 (:age (get-item!! creds table item {:consistent true}))))))
 
 (deftest put+conditional
-  (is (= :conditional-check-failed-exception
-         (-> (put-item {:table table
-                        :item item
-                        :when [:not-exists :#name]} {:throw false})
-             :hildebrand/error
-             :type))))
+  (with-items {create-table-default [item]}
+    (is (= :conditional-check-failed-exception
+           (try
+             (put-item!! creds table item {:when [:not-exists :#name]})
+             (catch ExceptionInfo e
+               (-> e ex-data :type)))))))
 
 (deftest put+returning
   (with-tables [create-table-default]
     (let [item' (assoc item :old "put-returning")]
-      (is (empty?  (put-item {:table table :item item'})))
-      (is (= item' (put-item {:table table :item item :return :all-old}))))))
+      (is (empty?  (put-item!! creds table item')))
+      (is (= item' (put-item!! creds table item {:return :all-old}))))))
 
 (deftest put+meta
   (with-tables [create-table-default]
-    (let [item (put-item {:table table :item item :capacity :total})]
+    (let [item (put-item!! creds table item {:capacity :total})]
       (is (empty? item))
       (is (= table (-> item meta :capacity :table))))))
 
 (deftest delete+
   (with-items {create-table-default [item]}
-    (is (empty? (del-item {:table table :key item})))))
+    (is (empty? (delete-item!! creds table item)))))
 
 (deftest delete+cc
   (with-items {create-table-default [item]}
     (is (= table
            (->
-            (del-item {:table table :key item :capacity :total})
+            (delete-item!! creds table item {:capacity :total})
             meta
             :capacity
             :table)))))
@@ -133,8 +127,9 @@
 (deftest delete+expected-expr
   (with-items {create-table-default [(assoc item :age 33 :hobby "Strolling")]}
     (is (empty?
-         (del-item
-          {:table table :key item :condition
+         (delete-item!!
+          creds table item
+          {:when
            [:and
             [:<= 30 :#age]
             [:<= :#age 34]
@@ -145,24 +140,25 @@
 (deftest delete+expected-expr-neg
   (with-items {create-table-default [(assoc item :age 33)]}
     (is (= :conditional-check-failed-exception
-           (-> (del-item
-                {:table table :key item :condition
-                 [:and
-                  [:or
-                   [:between :#age 10 30]
-                   [:between :#age 33 40]]
-                  [:exists :#garbage]]}
-                {:throw false})
-               :hildebrand/error
-               :type)))))
+           (try
+             (delete-item!!
+              creds table item
+              {:when
+               [:and
+                [:or
+                 [:between :#age 10 30]
+                 [:between :#age 33 40]]
+                [:exists :#garbage]]})
+             (catch ExceptionInfo e
+               (-> e ex-data :type)))))))
 
 (defn update-test [attrs-in updates attrs-out]
   (let [keyed-item (merge item attrs-in)
         expected   (merge item attrs-out)]
     (with-items {create-table-default [keyed-item]}
       (is (= expected
-             (update-item
-              {:table table :key item :update updates :return :all-new}))))))
+             (update-item!!
+              creds table item updates {:return :all-new}))))))
 
 (deftest update-item+
   (update-test
@@ -248,8 +244,7 @@
   (with-items {create-table-default [{:name "Mephistopheles"}]}
     (is (= [{:name "Mephistopheles"}]
            (map #(select-keys % #{:name})
-                (:items (query {:table table
-                                :where {:name [:eq "Mephistopheles"]}})))))))
+                (:items (query!! creds table {:name [:eq "Mephistopheles"]})))))))
 
 (def indexed-table :hildebrand-test-table-indexed)
 (def local-index   :hildebrand-test-table-indexed-local)
@@ -280,25 +275,24 @@
 (deftest query+local-index
   (with-items {create-table-indexed indexed-items}
     (is (= [(first indexed-items)]
-           (:items (query {:table indexed-table
-                           :index local-index
-                           :where {:user-id   [:= "moe"]
-                                   :timestamp [:< 2]}}))))))
+           (:items (query!!
+                    creds indexed-table {:user-id [:= "moe"] :timestamp [:< 2]}
+                    {:index local-index}))))))
 
 (deftest query+filter
   (with-items {create-table-indexed indexed-items}
     (is (= [(first indexed-items)]
-           (:items (query {:table indexed-table
-                           :where {:user-id [:= "moe"]}
-                           :filter [:< :#timestamp 2]}))))))
+           (:items (query!!
+                    creds indexed-table {:user-id [:= "moe"]}
+                    {:filter [:< :#timestamp 2]}))))))
 
 (deftest query+global-index
   (with-items {create-table-indexed indexed-items}
     (is (= [(-> indexed-items first (dissoc :data))]
-           (:items (query {:table indexed-table
-                           :index global-index
-                           :where {:game-title [:= "Super Metroid"]
-                                   :timestamp  [:< 2]}}))))))
+           (:items (query!!
+                    creds indexed-table {:game-title [:= "Super Metroid"]
+                                         :timestamp  [:< 2]}
+                    {:index global-index}))))))
 
 (def cleanup-description
   (partial
@@ -312,5 +306,5 @@
 (deftest describe-complex-table
   (with-tables [create-table-indexed]
     (is (= create-table-indexed
-           (-> (describe-table {:table indexed-table})
+           (-> (describe-table!! creds indexed-table)
                cleanup-description)))))

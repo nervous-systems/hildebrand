@@ -133,7 +133,7 @@
 
 (defn raise-condition-expression
   [req & [{:keys [out-key in-key] :or {out-key :condition-expression
-                                       in-key  :condition}}]]
+                                       in-key  :when}}]]
   (if-let [{:keys [expr values attrs]}
            (some-> in-key req not-empty expr/cond-expr->statement)]
     (cond-> (-> req (dissoc in-key) (assoc out-key expr))
@@ -206,10 +206,7 @@
           :return :return-values
           :capacity :return-consumed-capacity
           :metrics  :return-item-collection-metrics} m)]
-    (raise-condition-expression
-     m
-     {:in-key :when
-      :out-key :condition-expression})))
+    (raise-condition-expression m)))
 
 (defn raise-projection-expression [{:keys [project] :as m}]
   (cond-> (dissoc m :project)
@@ -435,13 +432,13 @@
 (def issue-request!! (comp <?! issue-request!))
 
 (defmulti  error->throwable :type)
-(defmethod error->throwable :default [{:keys [type message]}]
-  (Exception. (name type)))
+(defmethod error->throwable :default [{:keys [type message] :as error}]
+  (ex-info (name type) error))
 
 (defn issue-targeted-request! [target creds request & [mangle]]
   (go-catching
     (let [{:keys [hildebrand/error] :as resp}
-          (issue-request! creds {:target target :body request})]
+          (<? (issue-request! {:target target :creds creds :body request}))]
       (if error
         (error->throwable error)
         (cond-> resp mangle mangle)))))
@@ -463,5 +460,7 @@
 (defissuer delete-item [table key])
 (defissuer put-item    [table item])
 (defissuer describe-table [table])
-(defissuer list-tables    [table] :tables)
-(defissuer create-table   [name])
+(defissuer update-table   [table])
+(defissuer list-tables    [])
+(defissuer create-table   [])
+(defissuer query          [table where])
