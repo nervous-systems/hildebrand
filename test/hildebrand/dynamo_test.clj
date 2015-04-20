@@ -1,10 +1,9 @@
 (ns hildebrand.dynamo-test
   (:require
-   [hildebrand.dynamo.expr :refer [let-expr]]
    [hildebrand.dynamo :refer
     [put-item!! get-item!! delete-item!! update-item!! query!!
      describe-table! describe-table!! create-table!! update-table!!
-     list-tables!! await-status!! ensure-table!!]]
+     list-tables!! await-status!! ensure-table!! error->throwable]]
    [hildebrand.util :refer :all]
    [glossop :refer [<?! <? go-catching]]
    [clojure.test :refer :all]
@@ -23,7 +22,7 @@
           (<? (hildebrand.dynamo/issue-request!
                {:target target :creds creds :max-retries 0 :body content}))]
       (if (and throw error)
-        (throw+ error)
+        (throw (error->throwable error))
         resp))))
 
 (def issue!!        (comp <?! issue!))
