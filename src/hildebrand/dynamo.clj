@@ -3,6 +3,7 @@
    [clojure.set :as set]
    [clojure.string :as str]
    [clojure.walk :as walk]
+   [clojure.core.async :as async]
    [eulalie]
    [eulalie.dynamo]
    [glossop :refer :all :exclude [fn-> fn->>]]
@@ -466,3 +467,36 @@
 (defissuer list-tables    [])
 (defissuer create-table   [])
 (defissuer query          [table where])
+(defissuer delete-table   [table])
+
+(defn table-status! [creds table]
+  (go-catching
+    (try
+      (-> (describe-table! creds table) <? :status)
+      (catch clojure.lang.ExceptionInfo e
+        (when-not (= :resource-not-found-exception (-> e ex-data :type))
+          (throw e))))))
+
+(def table-status!! (comp <?! table-status!))
+
+(defn await-status! [creds table status]
+  (go-catching
+    (loop []
+      (let [status' (<? (table-status! creds table))]
+        (cond (nil? status')     nil
+              (= status status') status'
+              :else (do
+                      (<? (async/timeout 1000))
+                      (recur)))))))
+
+(def await-status!! (comp <?! await-status!))
+
+(defn ensure-table! [creds {:keys [table] :as create}]
+  (go-catching
+    (let [status (<? (table-status! creds table))]
+      (when-not status
+        (<? (create-table! creds create)))
+      (when-not (= :active status)
+        (<? (await-status! creds table :active))))))
+
+(def ensure-table!! (comp <?! ensure-table!))

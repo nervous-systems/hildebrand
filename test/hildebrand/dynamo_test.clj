@@ -4,12 +4,9 @@
    [hildebrand.dynamo :refer
     [put-item!! get-item!! delete-item!! update-item!! query!!
      describe-table! describe-table!! create-table!! update-table!!
-     list-tables!!]]
-   [slingshot.slingshot :refer [throw+ try+]]
+     list-tables!! await-status!! ensure-table!!]]
    [hildebrand.util :refer :all]
    [glossop :refer [<?! <? go-catching]]
-   [eulalie]
-   [eulalie.dynamo]
    [clojure.test :refer :all]
    [plumbing.core :refer :all]
    [clojure.core.async :as async]
@@ -29,19 +26,7 @@
         (throw+ error)
         resp))))
 
-;; move this into the project proper
-(defn await-status! [table status]
-  (go-catching
-    (loop []
-      (let [status' (-> (describe-table! creds table) <? :status)]
-        (cond (nil? status')     nil
-              (= status status') status'
-              :else (do
-                      (<? (async/timeout 1000))
-                      (recur)))))))
-
 (def issue!!        (comp <?! issue!))
-(def await-status!! (comp <?! await-status!))
 (def batch-write    (partial issue!! :batch-write-item))
 
 (def table :hildebrand-test-table)
@@ -53,13 +38,7 @@
 
 (defn with-tables* [specs f]
   (doseq [{:keys [table] :as spec} specs]
-    (try
-      (describe-table!! creds table)
-      (catch ExceptionInfo e
-        (when-not (= :resource-not-found-exception (-> e ex-data :type))
-          (throw e))
-        (create-table!! creds spec)
-        (await-status!! table :active))))
+    (ensure-table!! creds spec))
   (f))
 
 (defmacro with-tables [specs & body]
