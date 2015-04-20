@@ -13,6 +13,12 @@
    [plumbing.core :refer :all]
    [plumbing.map]))
 
+(defmulti  rewrite-table-out identity)
+(defmethod rewrite-table-out :default [x] x)
+
+(defmulti  rewrite-table-in identity)
+(defmethod rewrite-table-in :default [x] x)
+
 (defn join-keywords [& args]
   (some->> args not-empty (map name) str/join keyword))
 
@@ -83,7 +89,7 @@
              :key-type t}) [:hash :range]))
 
 (def index-common
-  {:name :index-name
+  {:name [:index-name rewrite-table-out]
    :keys [:key-schema ->key-schema]
    :project [:projection ->projection]})
 
@@ -108,20 +114,17 @@
 (def ->create-table
   (fn->>
    (transform-map
-    {:table [:table-name name]
+    {:table [:table-name rewrite-table-out]
      :throughput [:provisioned-throughput ->throughput]
      :attrs [:attribute-definitions (partial map ->attr-value)]
      :keys [:key-schema ->key-schema]})
-   raise-create-indexes
-   (schema/conforming schema/CreateTable*)))
+   raise-create-indexes))
 
 (def ->delete-table
-  (fn->> (transform-map {:table [:table-name name]})
-         (schema/conforming schema/DeleteTable*)))
+  (map-transformer {:table [:table-name rewrite-table-out]}))
 
 (def ->describe-table
-  (fn->> (transform-map {:table [:table-name name]})
-         (schema/conforming schema/DescribeTable*)))
+  (map-transformer {:table [:table-name rewrite-table-out]}))
 
 (defn ->item-spec [m]
   (for-map [[k v] m]
@@ -167,7 +170,7 @@
   (reduce
    (fn [m [table ops]]
      (let [ops (map (partial ->batch-req k) ops)]
-       (update-in m [:request-items table] concat ops)))
+       (update-in m [:request-items (rewrite-table-out table)] concat ops)))
    (dissoc m k) (m k)))
 
 (def ->batch-write
@@ -186,8 +189,8 @@
 
 (defn ->query [m]
   (let [m (transform-map
-           {:index :index-name
-            :table :table-name
+           {:index [:index-name rewrite-table-out]
+            :table [:table-name rewrite-table-out]
             :where [:key-conditions ->key-conds]
             :attrs [:projection-expression (fn->> (map name) (str/join " "))]
             :consistent :consistent-read
@@ -201,7 +204,7 @@
 (defn ->put-item [m]
   (let [m
         (transform-map
-         {:table [:table-name name]
+         {:table [:table-name rewrite-table-out]
           :item  [:item ->item-spec]
           :return :return-values
           :capacity :return-consumed-capacity
@@ -226,7 +229,7 @@
   (fn->>
    ->get-item-common
    (transform-map
-    {:table [:table-name name]
+    {:table [:table-name rewrite-table-out]
      :key    ->item-spec
      :capacity :return-consumed-capacity})))
 
@@ -242,7 +245,7 @@
 (def ->update-item
   (fn->>
    (transform-map
-    {:table [:table-name name]
+    {:table [:table-name rewrite-table-out]
      :key   ->item-spec
      :return :return-values
      :capacity :return-consumed-capacity
@@ -253,12 +256,11 @@
 (def ->delete-item
   (fn->>
    (transform-map
-    {:table [:table-name name]
+    {:table [:table-name rewrite-table-out]
      :key     ->item-spec
      :capacity :return-consumed-capacity
      :consistent :consistent-read})
-   raise-condition-expression
-   (schema/conforming schema/DeleteItem*)))
+   raise-condition-expression))
 
 (defn ->index-updates [updates]
   (for [[tag m] updates]
@@ -267,7 +269,7 @@
 (def ->update-table
   (fn->>
    (transform-map
-    {:table :table-name
+    {:table [:table-name rewrite-table-out]
      :attrs [:attribute-definitions (mapper ->attr-value)]
      :throughput [:provisioned-throughput ->throughput]
      :indexes [:global-secondary-index-updates ->index-updates]})))
@@ -315,7 +317,7 @@
 
 (def <-global-index
   (map-transformer
-   {:index-name :name
+   {:index-name [:name rewrite-table-in]
     :index-size-bytes :size
     :index-status :status
     :item-count :count
@@ -334,7 +336,7 @@
 (def <-table-description-body
   (fn->>
    (transform-map
-    {:table-name :table
+    {:table-name [:table rewrite-table-in]
      :attribute-definitions [:attrs (fn->> (map <-attr-def) (into {}))]
      :key-schema [:keys <-key-schema]
      :provisioned-throughput [:throughput <-throughput]
@@ -385,15 +387,15 @@
            {:unprocessed unprocessed-items})
     (let [resp (<-consumed-capacity resp)]
       (with-meta (for-map [[t items] responses]
-                   t (map <-item items))
+                   (rewrite-table-in t) (map <-item items))
         resp))))
 
 (defn <-delete-item [resp]
   (<-consumed-capacity resp))
 
 (defn <-list-tables [{:keys [last-evaluated-table-name table-names]}]
-  (with-meta {:tables table-names}
-    {:start-table last-evaluated-table-name}))
+  (with-meta {:tables (map rewrite-table-in table-names)}
+    {:start-table (some-> last-evaluated-table-name rewrite-table-in)}))
 
 (defn <-query [resp]
   (update resp :items (mapper <-item)))
