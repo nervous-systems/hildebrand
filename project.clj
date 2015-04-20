@@ -10,7 +10,7 @@
   :dependencies
   [[org.clojure/clojure    "1.6.0"]
    [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-   [io.nervous/eulalie     "0.1.0-SNAPSHOT"]
+   [io.nervous/eulalie     "0.1.1-SNAPSHOT"]
    [io.nervous/glossop     "0.1.0-SNAPSHOT"]
    [prismatic/plumbing     "0.4.1"]
    [slingshot              "0.12.2"]

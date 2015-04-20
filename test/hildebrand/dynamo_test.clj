@@ -20,8 +20,7 @@
   (go-catching
     (let [{:keys [hildebrand/error] :as resp}
           (<? (hildebrand.dynamo/issue-request!
-               creds
-               {:target target :max-retries 0 :body content}))]
+               {:target target :creds creds :max-retries 0 :body content}))]
       (if (and throw error)
         (throw+ error)
         resp))))
@@ -87,9 +86,9 @@
   (with-tables [create-table-default
                 (assoc create-table-default
                        :table :hildebrand-test-table-list-tables)]
-    (let [tables (issue!! :list-tables {:limit 1})]
+    (let [{:keys [tables] :as r} (issue!! :list-tables {:limit 1})]
       (is (= 1 (count tables)))
-      (is (-> tables meta :start-table)))))
+      (is (-> r meta :start-table)))))
 
 (deftest put+get
   (with-tables [create-table-default]

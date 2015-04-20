@@ -66,7 +66,7 @@
    :boolean    :BOOL})
 
 (def type-aliases-in
-  (for-map [[k v] type-aliases]
+  (for-map [[k v] type-aliases-out]
     v k))
 
 (defn ->attr-value [[k v]]
@@ -108,9 +108,8 @@
 (def ->create-table
   (fn->>
    (transform-map
-    {:name [:table-name name]
-     :throughput [:provisioned-throughput
-                  ->throughput]
+    {:table [:table-name name]
+     :throughput [:provisioned-throughput ->throughput]
      :attrs [:attribute-definitions (partial map ->attr-value)]
      :keys [:key-schema ->key-schema]})
    raise-create-indexes
@@ -280,11 +279,11 @@
   (map-transformer
    {:start-table [:exclusive-start-table-name]}))
 
-(defmulti transform-request :target)
+(defmulti transform-request (fn [target body] target))
 (defmulti-dispatch
   transform-request
   (map-vals
-   (fn [f] (fn-> :body f))
+   (fn [f] #(f %2))
    {:query          ->query
     :list-tables    ->list-tables
     :create-table   ->create-table
@@ -396,17 +395,18 @@
   (<-consumed-capacity resp))
 
 (defn <-list-tables [{:keys [last-evaluated-table-name table-names]}]
-  (with-meta table-names {:start-table last-evaluated-table-name}))
+  (with-meta {:tables table-names}
+    {:start-table last-evaluated-table-name}))
 
 (defn <-query [resp]
   (update resp :items (mapper <-item)))
 
-(defmulti  transform-response :target)
-(defmethod transform-response :default [{:keys [body]}] body)
+(defmulti  transform-response (fn [target body] target))
+(defmethod transform-response :default [_ body] body)
 (defmulti-dispatch
   transform-response
   (map-vals
-   #(comp % :body)
+   (fn [f] #(f %2))
    {:list-tables       <-list-tables
     :batch-write-item  <-batch-write
     :batch-get-item    <-batch-get
@@ -420,31 +420,48 @@
     :update-table      (fn-> :table-description <-table-description-body)
     :query             <-query}))
 
-(defmulti  transform-error
-  (fn [{target :target {:keys [type]} :hildebrand/error}] [target type]))
-
-(defmethod transform-error :default [m]
-  (set/rename-keys m {:error :hildebrand/error}))
-
-(defn issue-request! [creds {:keys [target] :as req}]
-  (clojure.pprint/pprint (transform-request req))
-  (let [req (assoc req :creds creds)] ;; TODO move this into eulalie
-    (go-catching
-      (let [resp (-> (eulalie/issue-request!
-                      eulalie.dynamo/service
-                      creds
-                      (assoc req :content (transform-request req)))
-                     <?
-                     (dissoc :request)
-                     (assoc :target target
-                            :hildebrand/request req)
-                     (set/rename-keys {:error :hildebrand/error}))]
-        (if (:hildebrand/error resp)
-          (do
-            ;; TODO response?
-            (clojure.pprint/pprint (-> resp :response :body))
-            (transform-error resp))
-          (let [resp (transform-response resp)]
-            (branch-> resp :hildebrand/error transform-error)))))))
+(defn issue-request! [{:keys [target] :as req}]
+  (go-catching
+    (let [resp (-> req
+                   (assoc :service :dynamo)
+                   (update :body (partial transform-request target))
+                   eulalie/issue-request!
+                   <?
+                   (set/rename-keys {:error :hildebrand/error}))]
+      (if (:hildebrand/error resp)
+        resp
+        (transform-response target (:body resp))))))
 
 (def issue-request!! (comp <?! issue-request!))
+
+(defmulti  error->throwable :type)
+(defmethod error->throwable :default [{:keys [type message]}]
+  (Exception. (name type)))
+
+(defn issue-targeted-request! [target creds request & [mangle]]
+  (go-catching
+    (let [{:keys [hildebrand/error] :as resp}
+          (issue-request! creds {:target target :body request})]
+      (if error
+        (error->throwable error)
+        (cond-> resp mangle mangle)))))
+
+(defmacro defissuer [target-name args & [mangle]]
+  (let [fname!  (-> target-name name (str "!"))
+        fname!! (str fname! "!")
+        args'   (into '[creds] (conj args '& '[extra]))
+        body  `(issue-targeted-request!
+                ~(keyword target-name) ~'creds
+                (merge (plumbing.map/keyword-map ~@args) ~'extra)
+                ~(or mangle identity))]
+    `(do
+       (defn ~(symbol fname!)  ~args' ~body)
+       (defn ~(symbol fname!!) ~args' (<?! ~body)))))
+
+(defissuer get-item    [table key])
+(defissuer update-item [table key update])
+(defissuer delete-item [table key])
+(defissuer put-item    [table item])
+(defissuer describe-table [table])
+(defissuer list-tables    [table] :tables)
+(defissuer create-table   [name])
