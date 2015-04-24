@@ -106,7 +106,9 @@
            :metrics true}))))
 
 (deftest get-item+
-  (is (= {}
+  (is (= {:table-name :users
+          :key {"foo" {:S "bar"}}
+          :consistent-read true}
          (restructure-request
           :get-item
           {:table-name :users
