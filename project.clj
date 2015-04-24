@@ -1,7 +1,7 @@
 (defproject io.nervous/hildebrand "0.1.0-SNAPSHOT"
   :description "High-level, asynchronous AWS client library"
   :url "https://github.com/nervous-systems/hildebrand"
-  :license {:name "Unlicense" :url "http://unlicense.org/UNLICENSE"}
+  :License {:name "Unlicense" :url "http://unlicense.org/UNLICENSE"}
   :scm {:name "git" :url "https://github.com/nervous-systems/hildebrand"}
   :deploy-repositories [["clojars" {:creds :gpg}]]
   :signing {:gpg-key "moe@nervous.io"}

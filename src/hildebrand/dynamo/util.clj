@@ -1,11 +1,12 @@
 (ns hildebrand.dynamo.util
+  (:require [plumbing.core :refer [for-map]])
   (:import [clojure.lang BigInt]))
 
 ;; Taken from Faraday
 (defn- assert-precision [x]
   (let [^BigDecimal dec (if (string? x) (BigDecimal. ^String x) (bigdec x))]
     (assert (<= (.precision dec) 38)
-            (str "DynamoDB numbers have <= 38 digits of precision."))
+	    (str "DynamoDB numbers have <= 38 digits of precision."))
     true))
 
 ;; Taken from Faraday
@@ -35,3 +36,19 @@
   (if (empty? x)
     (throw (Exception. "Empty values disallowed"))
     x))
+
+(def type-aliases-out
+  {:string     :S
+   :number     :N
+   :list       :L
+   :binary     :B
+   :number-set :NS
+   :string-set :SS
+   :binary-set :BS
+   :map        :M
+   :null       :NULL
+   :boolean    :BOOL})
+
+(def type-aliases-in
+  (for-map [[k v] type-aliases-out]
+    v k))

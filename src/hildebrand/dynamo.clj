@@ -8,9 +8,9 @@
    [eulalie.dynamo]
    [glossop :refer :all :exclude [fn-> fn->>]]
    [hildebrand.dynamo.schema :as schema]
-   [hildebrand.dynamo.expr :as expr :refer [flatten-expr]]
    [hildebrand.util :refer :all]
    [hildebrand.dynamo.util :refer :all]
+   [hildebrand.dynamo.request :refer [restructure-request]]
    [plumbing.core :refer :all]
    [plumbing.map]))
 
@@ -19,9 +19,6 @@
 
 (defmulti  rewrite-table-in identity)
 (defmethod rewrite-table-in :default [x] x)
-
-(defn join-keywords [& args]
-  (some->> args not-empty (map name) str/join keyword))
 
 (defn from-attr-value [[tag value]]
   (condp = tag
@@ -34,275 +31,12 @@
     :SS   (into #{} value)
     :NS   (into #{} (map string->number value))))
 
-(defn attr [t v] {t v})
-
-(defn to-set-attr [v]
-  (let [v (throw-empty v)]
-    (cond
-      (every? string? v)  {:SS (map fq-name v)}
-      (every? ddb-num? v) {:NS (map str     v)}
-      :else (throw (Exception. "Invalid set type")))))
-
-(defn to-attr-value [v]
-  (let [v (branch-> v keyword? fq-name)]
-    (branch v
-      string?  {:S (throw-empty v)}
-      nil?     {:NULL true}
-      boolean? {:BOOL v}
-      ddb-num? {:N (str v)}
-      vector?  {:L (map to-attr-value v)}
-      map?     {:M (for-map [[k v'] v]
-                     (name k) (to-attr-value v'))}
-      set?     (to-set-attr v)
-      (throw (Exception. (str "Invalid value " (type v)))))))
-
-(def ->throughput
-  (map-transformer {:read :read-capacity-units
-                    :write :write-capacity-units}))
-
-(def type-aliases-out
-  {:string     :S
-   :number     :N
-   :list       :L
-   :binary     :B
-   :number-set :NS
-   :string-set :SS
-   :binary-set :BS
-   :map        :M
-   :null       :NULL
-   :boolean    :BOOL})
-
-(def type-aliases-in
-  (for-map [[k v] type-aliases-out]
-    v k))
-
-(defn ->attr-value [[k v]]
-  {:attribute-name (name k)
-   :attribute-type (type-aliases-out v v)})
-
-(defn ->projection [[tag & [arg]]]
-  (cond-> {:projection-type tag}
-    arg (assoc :non-key-attributes arg)))
-
-(def ->key-schema
-  (mapper (fn [t attr]
-            {:attribute-name (name attr)
-             :key-type t}) [:hash :range]))
-
-(def index-common
-  {:name [:index-name rewrite-table-out]
-   :keys [:key-schema ->key-schema]
-   :project [:projection ->projection]})
-
-(def ->gs-index
-  (map-transformer
-   (assoc index-common
-          :throughput [:provisioned-throughput
-                       ->throughput])))
-
-(def ->ls-index
-  (map-transformer index-common))
-
-(defn raise-create-indexes [{{:keys [global local]} :indexes :as req}]
-  (cond-> (dissoc req :indexes)
-    (not-empty global) (assoc
-                        :global-secondary-indexes
-                        (map ->gs-index global))
-    (not-empty local) (assoc
-                       :local-secondary-indexes
-                       (map ->ls-index local))))
-
-(def ->create-table
-  (fn->>
-   (transform-map
-    {:table [:table-name rewrite-table-out]
-     :throughput [:provisioned-throughput ->throughput]
-     :attrs [:attribute-definitions (partial map ->attr-value)]
-     :keys [:key-schema ->key-schema]})
-   raise-create-indexes))
-
-(def ->delete-table
-  (map-transformer {:table [:table-name rewrite-table-out]}))
-
-(def ->describe-table
-  (map-transformer {:table [:table-name rewrite-table-out]}))
-
-(defn ->item-spec [m]
-  (for-map [[k v] m]
-    (name k) (to-attr-value v)))
-
-(defn ->item [m]
-  (for-map [[k v] m]
-    (name k) (to-attr-value v)))
-
-(defn raise-condition-expression
-  [req & [{:keys [out-key in-key] :or {out-key :condition-expression
-                                       in-key  :when}}]]
-  (if-let [{:keys [expr values attrs]}
-           (some-> in-key req not-empty expr/cond-expr->statement)]
-    (cond-> (-> req (dissoc in-key) (assoc out-key expr))
-      (not-empty values) (update
-                          :expression-attribute-values
-                          merge (->item values))
-      (not-empty attrs)  (update
-                          :expression-attribute-names
-                          merge attrs))
-    req))
-
-(defn raise-update-expression [{update' :update :as req}]
-  (if (not-empty update')
-    (let [{:keys [values expr attrs]}
-          (map-vals not-empty (expr/update-ops->statement update'))]
-      (cond-> (dissoc req :update)
-        values (update
-                :expression-attribute-values
-                merge (map-vals to-attr-value values))
-        attrs  (update :expression-attribute-names merge attrs)
-        expr   (assoc :update-expression expr)))
-    req))
-
-(defn ->batch-req [type m]
-  (let [m (->item-spec m)]
-    (case type
-      :delete {:delete-request {:key  m}}
-      :put    {:put-request    {:item m}})))
-
-(defn raise-batch-ops [k m]
-  (reduce
-   (fn [m [table ops]]
-     (let [ops (map (partial ->batch-req k) ops)]
-       (update-in m [:request-items (rewrite-table-out table)] concat ops)))
-   (dissoc m k) (m k)))
-
-(def ->batch-write
-  (fn->>
-   (raise-batch-ops :delete)
-   (raise-batch-ops :put)
-   (transform-map {:capacity :return-consumed-capacity
-                   :metrics  :return-item-collection-metrics})))
-
-(def comparison-ops {:< :lt :<= :le := :eq :> :gt :>= :ge})
-
-(defn ->key-conds [conds]
-  (for-map [[col [op & args]] conds]
-    col {:attribute-value-list (map to-attr-value args)
-         :comparison-operator (comparison-ops op op)}))
-
-(defn ->query [m]
-  (let [m (transform-map
-           {:index [:index-name rewrite-table-out]
-            :table [:table-name rewrite-table-out]
-            :where [:key-conditions ->key-conds]
-            :attrs [:projection-expression (fn->> (map name) (str/join " "))]
-            :consistent :consistent-read
-            :sort [:scan-index-forward (partial = :asc)]}
-           m)]
-    (raise-condition-expression
-     m
-     {:in-key :filter
-      :out-key :filter-expression})))
-
-(defn ->put-item [m]
-  (let [m
-        (transform-map
-         {:table [:table-name rewrite-table-out]
-          :item  [:item ->item-spec]
-          :return :return-values
-          :capacity :return-consumed-capacity
-          :metrics  :return-item-collection-metrics} m)]
-    (raise-condition-expression m)))
-
-(defn raise-projection-expression [{:keys [project] :as m}]
-  (cond-> (dissoc m :project)
-    (not-empty project)
-    (assoc :expression-attribute-names
-           (for-map [attr project]
-             attr (expr/unprefix-col attr))
-           :projection-expression
-           project)))
-
-(def ->get-item-common
-  (fn->>
-   raise-projection-expression
-   (transform-map {:consistent :consistent-read})))
-
-(def ->get-item
-  (fn->>
-   ->get-item-common
-   (transform-map
-    {:table [:table-name rewrite-table-out]
-     :key    ->item-spec
-     :capacity :return-consumed-capacity})))
-
-(def ->batch-get
-  (map-transformer
-   {:items [:request-items
-            (partial map-vals
-                     (fn->>
-                      ->get-item-common
-                      (transform-map {:keys (mapper ->item-spec)})))]
-    :capacity :return-consumed-capacity}))
-
-(def ->update-item
-  (fn->>
-   (transform-map
-    {:table [:table-name rewrite-table-out]
-     :key   ->item-spec
-     :return :return-values
-     :capacity :return-consumed-capacity
-     :metrics  :return-item-collection-metrics})
-   raise-update-expression
-   raise-condition-expression))
-
-(def ->delete-item
-  (fn->>
-   (transform-map
-    {:table [:table-name rewrite-table-out]
-     :key     ->item-spec
-     :capacity :return-consumed-capacity
-     :consistent :consistent-read})
-   raise-condition-expression))
-
-(defn ->index-updates [updates]
-  (for [[tag m] updates]
-    {tag (->gs-index m)}))
-
-(def ->update-table
-  (fn->>
-   (transform-map
-    {:table [:table-name rewrite-table-out]
-     :attrs [:attribute-definitions (mapper ->attr-value)]
-     :throughput [:provisioned-throughput ->throughput]
-     :indexes [:global-secondary-index-updates ->index-updates]})))
-
-(def ->list-tables
-  (map-transformer
-   {:start-table [:exclusive-start-table-name]}))
-
-(defmulti transform-request (fn [target body] target))
-(defmulti-dispatch
-  transform-request
-  (map-vals
-   (fn [f] #(f %2))
-   {:query          ->query
-    :list-tables    ->list-tables
-    :create-table   ->create-table
-    :put-item       ->put-item
-    :delete-table   ->delete-table
-    :get-item       ->get-item
-    :delete-item    ->delete-item
-    :describe-table ->describe-table
-    :update-item    ->update-item
-    :batch-write-item ->batch-write
-    :batch-get-item   ->batch-get
-    :update-table     ->update-table}))
-
 (defn <-attr-def [{:keys [attribute-name attribute-type]}]
   [attribute-name (type-aliases-in attribute-type attribute-type)])
 
 (def <-key-schema
   (fn->> (sort-by :key-type)
-         (map :attribute-name)))
+	 (map :attribute-name)))
 
 (def <-throughput
   (key-renamer
@@ -332,7 +66,7 @@
   (-> req
       (dissoc :global-indexes :local-indexes)
       (assoc :indexes {:global global-indexes
-                       :local  local-indexes})))
+		       :local  local-indexes})))
 
 (def <-table-description-body
   (fn->>
@@ -356,9 +90,9 @@
   (map-transformer
    {:consumed-capacity
     [:capacity (partial
-                walk/prewalk-replace
-                {:capacity-units :capacity
-                 :table-name     :table})]}))
+		walk/prewalk-replace
+		{:capacity-units :capacity
+		 :table-name     :table})]}))
 
 (def <-item (partial map-vals (partial apply from-attr-value)))
 
@@ -370,26 +104,26 @@
 
 (defn error [type message & [data]]
   (assoc data
-         :hildebrand/error
-         {:type type :message message}))
+	 :hildebrand/error
+	 {:type type :message message}))
 
 (defn <-batch-write [{:keys [unprocessed-items] :as resp}]
   (if (not-empty unprocessed-items)
     (error :unprocessed-items
-           (format "%d unprocessed items" (count unprocessed-items))
-           {:unprocessed unprocessed-items})
+	   (format "%d unprocessed items" (count unprocessed-items))
+	   {:unprocessed unprocessed-items})
     (let [resp (<-consumed-capacity resp)]
       (with-meta {} resp))))
 
 (defn <-batch-get [{:keys [unprocessed-items responses] :as resp}]
   (if (not-empty unprocessed-items)
     (error :unprocessed-items
-           (format "%d unprocessed items" (count unprocessed-items))
-           {:unprocessed unprocessed-items})
+	   (format "%d unprocessed items" (count unprocessed-items))
+	   {:unprocessed unprocessed-items})
     (let [resp (<-consumed-capacity resp)]
       (with-meta (for-map [[t items] responses]
-                   (rewrite-table-in t) (map <-item items))
-        resp))))
+		   (rewrite-table-in t) (map <-item items))
+	resp))))
 
 (defn <-delete-item [resp]
   (<-consumed-capacity resp))
@@ -423,14 +157,14 @@
 (defn issue-request! [{:keys [target] :as req}]
   (go-catching
     (let [resp (-> req
-                   (assoc :service :dynamo)
-                   (update :body (partial transform-request target))
-                   eulalie/issue-request!
-                   <?
-                   (set/rename-keys {:error :hildebrand/error}))]
+		   (assoc :service :dynamo)
+		   (update :body (partial restructure-request target))
+		   eulalie/issue-request!
+		   <?
+		   (set/rename-keys {:error :hildebrand/error}))]
       (if (:hildebrand/error resp)
-        resp
-        (transform-response target (:body resp))))))
+	resp
+	(transform-response target (:body resp))))))
 
 (def issue-request!! (comp <?! issue-request!))
 
@@ -441,19 +175,19 @@
 (defn issue-targeted-request! [target creds request & [mangle]]
   (go-catching
     (let [{:keys [hildebrand/error] :as resp}
-          (<? (issue-request! {:target target :creds creds :body request}))]
+	  (<? (issue-request! {:target target :creds creds :body request}))]
       (if error
-        (error->throwable error)
-        (cond-> resp mangle mangle)))))
+	(error->throwable error)
+	(cond-> resp mangle mangle)))))
 
 (defmacro defissuer [target-name args & [mangle]]
   (let [fname!  (-> target-name name (str "!"))
-        fname!! (str fname! "!")
-        args'   (into '[creds] (conj args '& '[extra]))
-        body  `(issue-targeted-request!
-                ~(keyword target-name) ~'creds
-                (merge (plumbing.map/keyword-map ~@args) ~'extra)
-                ~(or mangle identity))]
+	fname!! (str fname! "!")
+	args'   (into '[creds] (conj args '& '[extra]))
+	body  `(issue-targeted-request!
+		~(keyword target-name) ~'creds
+		(merge (plumbing.map/keyword-map ~@args) ~'extra)
+		~(or mangle identity))]
     `(do
        (defn ~(symbol fname!)  ~args' ~body)
        (defn ~(symbol fname!!) ~args' (<?! ~body)))))
@@ -474,8 +208,8 @@
     (try
       (-> (describe-table! creds table) <? :status)
       (catch clojure.lang.ExceptionInfo e
-        (when-not (= :resource-not-found-exception (-> e ex-data :type))
-          (throw e))))))
+	(when-not (= :resource-not-found-exception (-> e ex-data :type))
+	  (throw e))))))
 
 (def table-status!! (comp <?! table-status!))
 
@@ -483,11 +217,11 @@
   (go-catching
     (loop []
       (let [status' (<? (table-status! creds table))]
-        (cond (nil? status')     nil
-              (= status status') status'
-              :else (do
-                      (<? (async/timeout 1000))
-                      (recur)))))))
+	(cond (nil? status')     nil
+	      (= status status') status'
+	      :else (do
+		      (<? (async/timeout 1000))
+		      (recur)))))))
 
 (def await-status!! (comp <?! await-status!))
 
@@ -495,8 +229,8 @@
   (go-catching
     (let [status (<? (table-status! creds table))]
       (when-not status
-        (<? (create-table! creds create)))
+	(<? (create-table! creds create)))
       (when-not (= :active status)
-        (<? (await-status! creds table :active))))))
+	(<? (await-status! creds table :active))))))
 
 (def ensure-table!! (comp <?! ensure-table!))
