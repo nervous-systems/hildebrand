@@ -12,8 +12,8 @@
           :global-secondary-indexes
           [{:index-name :users-by-id
             :key-schema [{:attribute-name "id" :key-type :hash}]
-            :projection-type :include
-            :non-key-attributes [:x :y]
+            :projection {:projection-type :include 
+                         :non-key-attributes [:x :y]}
             :provisioned-throughput
             {:read-capacity-units 1 :write-capacity-units 5}}]
           :local-secondary-indexes
@@ -21,7 +21,7 @@
             :key-schema
             [{:attribute-name "email" :key-type :hash}
              {:attribute-name "timestamp" :key-type :range}]
-            :projection-type :keys-only}]
+            :projection {:projection-type :keys-only}}]
           :provisioned-throughput {:read-capacity-units 5
                                    :write-capacity-units 1}}
          (restructure-request

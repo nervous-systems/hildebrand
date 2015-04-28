@@ -6,6 +6,7 @@
   (is (= {:table :users
           :attrs {:name :string :age :number}
           :keys [:name :age]
+          :throughput {:read 5 :write 1}
           :indexes
           {:global [{:name :gs-index
                      :keys [:age :something]
@@ -15,6 +16,7 @@
           :create-table
           {:table-description
            {:table-name :users
+            :provisioned-throughput {:read 5 :write 1}
             :key-schema [{:attribute-name :age  :key-type :range}
                          {:attribute-name :name :key-type :hash}]
             :attribute-definitions
@@ -26,4 +28,4 @@
                            {:attribute-name :something :key-type :range}]
               :projection {:projection-type :include 
                            :non-key-attributes [:something-else]}
-              :throughput {:read 1 :write 1}}]}}))))
+              :provisioned-throughput {:read 1 :write 1}}]}}))))

@@ -5,25 +5,25 @@
             [plumbing.core :refer :all]
             [clojure.walk :as walk]))
 
-(defn from-attr-value [[tag value]]
-  (condp = tag
-    :S    value
-    :N    (string->number value)
-    :M    (map-vals (partial apply from-attr-value) value)
-    :L    (mapv     (partial apply from-attr-value) value)
-    :BOOL (boolean value)
-    :NULL nil
-    :SS   (into #{} value)
-    :NS   (into #{} (map string->number value))))
+(defn from-attr-value [m]
+  (let [[[tag value]] (seq m)]
+    (condp = tag
+      :S    value
+      :N    (string->number value)
+      :M    (map-vals from-attr-value value)
+      :L    (mapv     from-attr-value value)
+      :BOOL (boolean value)
+      :NULL nil
+      :SS   (into #{} value)
+      :NS   (into #{} (map string->number value)))))
 
-(defn <-attr-def [{:keys [attribute-name attribute-type]}]
+(defn ->attr-def [{:keys [attribute-name attribute-type]}]
   [attribute-name (type-aliases-in attribute-type attribute-type)])
 
-(def <-key-schema
-  (fn->> (sort-by :key-type)
-	 (map :attribute-name)))
+(def ->key-schema
+  (fn->> (sort-by :key-type) (map :attribute-name)))
 
-(def <-throughput
+(def ->throughput
   #(set/rename-keys
     %
     {:read-capacity-units :read
@@ -32,19 +32,27 @@
      :last-increase-date-time :last-increase
      :last-decrease-date-time :last-decrease}))
 
-(defn <-projection [{attrs :non-key-attributes type :projection-type}]
-  (cond-> [type]
-    (not-empty attrs) (conj attrs)))
+(defn ->projection [{attrs :non-key-attributes type :projection-type}]
+  (when type
+    (cond-> [type] (not-empty attrs) (conj attrs))))
 
-(def <-global-index
-  (map-transformer
-   {:index-name :name
-    :index-size-bytes :size
-    :index-status :status
-    :item-count :count
-    :key-schema [:keys <-key-schema]
-    :projection [:project <-projection]
-    :provisioned-throughput [:throughput <-throughput]}))
+(def index-renames
+  {:index-name :name
+   :index-size-bytes :size
+   :index-status :status
+   :item-count :count
+   :key-schema :keys
+   :projection :project 
+   :provisioned-throughput :throughput})
+
+(def ->global-index
+  (fn->
+   (update :key-schema ->key-schema)
+   (update :projection ->projection)
+   (update :provisioned-throughput ->throughput) 
+   (set/rename-keys index-renames)))
+
+(def ->local-index (fn-> ->global-index (dissoc :throughput)))
 
 (def table-description-renames
   {:table-name :table
@@ -61,20 +69,20 @@
   (assoc m k v))
 
 (defmethod transform-table-kv :attribute-definitions [k v m]
-  (assoc m k (into {} (map <-attr-def v))))
+  (assoc m k (into {} (map ->attr-def v))))
 
 (defmethod transform-table-kv :key-schema [k v m]
-  (assoc m k (<-key-schema v)))
+  (assoc m k (->key-schema v)))
 
 (defmethod transform-table-kv :provisioned-throughput [k v m]
-  (assoc m k (<-throughput v)))
+  (assoc m k (->throughput v)))
 
 (defmethod transform-table-kv :global-secondary-indexes [k v m]
-  (update-in m [:indexes :global] into (map <-global-index v)))
+  (update-in m [:indexes :global] into (map ->global-index v)))
 
 (defmethod transform-table-kv :local-secondary-indexes [k v m]
   ;; These are a subset of global indexes
-  (update-in m [:indexes :local] into (map <-global-index v)))
+  (update-in m [:indexes :local] into (map ->local-index v)))
 
 (defn ->table-description [m]
   (set/rename-keys
@@ -97,7 +105,7 @@
                :table-name     :table}
               v)))
 
-(def ->item (partial map-vals (partial apply from-attr-value)))
+(def ->item (partial map-vals from-attr-value))
 
 (defmethod transform-response-kv :item [k v m _]
   (assoc m k (->item v)))
@@ -129,7 +137,7 @@
   (or (maybe-unprocessed-error unprocessed)
       (with-meta
         (for-map [[t items] responses]
-          t (map <-item items))
+          t (map ->item items))
         m)))
 
 (defmethod restructure-response* :batch-write-item [_ {:keys [unprocessed] :as resp}]
