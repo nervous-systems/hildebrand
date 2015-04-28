@@ -11,148 +11,9 @@
    [hildebrand.util :refer :all]
    [hildebrand.dynamo.util :refer :all]
    [hildebrand.dynamo.request :refer [restructure-request]]
+   [hildebrand.dynamo.response :refer [restructure-response]] 
    [plumbing.core :refer :all]
    [plumbing.map]))
-
-(defmulti  rewrite-table-out identity)
-(defmethod rewrite-table-out :default [x] x)
-
-(defmulti  rewrite-table-in identity)
-(defmethod rewrite-table-in :default [x] x)
-
-(defn from-attr-value [[tag value]]
-  (condp = tag
-    :S    value
-    :N    (string->number value)
-    :M    (map-vals (partial apply from-attr-value) value)
-    :L    (mapv     (partial apply from-attr-value) value)
-    :BOOL (boolean value)
-    :NULL nil
-    :SS   (into #{} value)
-    :NS   (into #{} (map string->number value))))
-
-(defn <-attr-def [{:keys [attribute-name attribute-type]}]
-  [attribute-name (type-aliases-in attribute-type attribute-type)])
-
-(def <-key-schema
-  (fn->> (sort-by :key-type)
-	 (map :attribute-name)))
-
-(def <-throughput
-  (key-renamer
-   {:read-capacity-units :read
-    :write-capacity-units :write
-    :number-of-decreases-today :decreases
-    :last-increase-date-time :last-increase
-    :last-decrease-date-time :last-decrease}))
-
-(defn <-projection [{attrs :non-key-attributes type :projection-type}]
-  (cond-> [type]
-    (not-empty attrs) (conj attrs)))
-
-(def <-global-index
-  (map-transformer
-   {:index-name [:name rewrite-table-in]
-    :index-size-bytes :size
-    :index-status :status
-    :item-count :count
-    :key-schema [:keys <-key-schema]
-    :projection [:project <-projection]
-    :provisioned-throughput [:throughput <-throughput]}))
-
-;; that bidirectional transformation function though
-
-(defn raise-indexes [{:keys [global-indexes local-indexes] :as req}]
-  (-> req
-      (dissoc :global-indexes :local-indexes)
-      (assoc :indexes {:global global-indexes
-		       :local  local-indexes})))
-
-(def <-table-description-body
-  (fn->>
-   (transform-map
-    {:table-name [:table rewrite-table-in]
-     :attribute-definitions [:attrs (fn->> (map <-attr-def) (into {}))]
-     :key-schema [:keys <-key-schema]
-     :provisioned-throughput [:throughput <-throughput]
-     :table-status :status
-     :table-size-bytes :size
-     :item-count :items
-     :creation-date-time :created
-     :global-secondary-indexes [:global-indexes (mapper <-global-index)]
-     :local-secondary-indexes  [:local-indexes  (mapper <-global-index)]})
-   raise-indexes))
-
-(def <-create-table
-  (fn->> :table-description <-table-description-body))
-
-(def <-consumed-capacity
-  (map-transformer
-   {:consumed-capacity
-    [:capacity (partial
-		walk/prewalk-replace
-		{:capacity-units :capacity
-		 :table-name     :table})]}))
-
-(def <-item (partial map-vals (partial apply from-attr-value)))
-
-(defn <-wrapped-item [item-k resp]
-  (let [resp (<-consumed-capacity resp)]
-    (with-meta
-      (-> resp item-k <-item)
-      (dissoc resp item-k))))
-
-(defn error [type message & [data]]
-  (assoc data
-	 :hildebrand/error
-	 {:type type :message message}))
-
-(defn <-batch-write [{:keys [unprocessed-items] :as resp}]
-  (if (not-empty unprocessed-items)
-    (error :unprocessed-items
-	   (format "%d unprocessed items" (count unprocessed-items))
-	   {:unprocessed unprocessed-items})
-    (let [resp (<-consumed-capacity resp)]
-      (with-meta {} resp))))
-
-(defn <-batch-get [{:keys [unprocessed-items responses] :as resp}]
-  (if (not-empty unprocessed-items)
-    (error :unprocessed-items
-	   (format "%d unprocessed items" (count unprocessed-items))
-	   {:unprocessed unprocessed-items})
-    (let [resp (<-consumed-capacity resp)]
-      (with-meta (for-map [[t items] responses]
-		   (rewrite-table-in t) (map <-item items))
-	resp))))
-
-(defn <-delete-item [resp]
-  (<-consumed-capacity resp))
-
-(defn <-list-tables [{:keys [last-evaluated-table-name table-names]}]
-  (with-meta {:tables (map rewrite-table-in table-names)}
-    {:start-table (some-> last-evaluated-table-name rewrite-table-in)}))
-
-(defn <-query [resp]
-  (update resp :items (mapper <-item)))
-
-(defmulti  transform-response (fn [target body] target))
-(defmethod transform-response :default [_ body] body)
-(defmulti-dispatch
-  transform-response
-  (map-vals
-   (fn [f] #(f %2))
-   {:list-tables       <-list-tables
-    :batch-write-item  <-batch-write
-    :batch-get-item    <-batch-get
-    :create-table      <-create-table
-    :delete-table      <-create-table
-    :get-item          (partial <-wrapped-item :item)
-    :put-item          (partial <-wrapped-item :attributes)
-    :update-item       (partial <-wrapped-item :attributes)
-    :delete-item       (partial <-wrapped-item :attributes)
-    :describe-table    (fn-> :table <-table-description-body)
-    :update-table      (fn-> :table-description <-table-description-body)
-    :query             <-query}))
 
 (defn issue-request! [{:keys [target] :as req}]
   (go-catching
@@ -164,7 +25,7 @@
 		   (set/rename-keys {:error :hildebrand/error}))]
       (if (:hildebrand/error resp)
 	resp
-	(transform-response target (:body resp))))))
+	(restructure-response target (:body resp))))))
 
 (def issue-request!! (comp <?! issue-request!))
 
@@ -202,6 +63,8 @@
 (defissuer create-table   [])
 (defissuer query          [table where])
 (defissuer delete-table   [table])
+(defissuer batch-write-item [])
+(defissuer batch-get-item [])
 
 (defn table-status! [creds table]
   (go-catching

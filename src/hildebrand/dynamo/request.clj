@@ -90,7 +90,8 @@
    :consistent  :consistent-read
    :where       :key-conditions
    :sort        :scan-index-forward
-   :throughput  :provisioned-throughput})
+   :throughput  :provisioned-throughput
+   :segments    :total-segments})
 
 (def rename #(set/rename-keys % renames))
 
@@ -142,8 +143,8 @@
 (defn restructure-index [{:keys [name throughput keys] [tag & [arg]] :project :as m}]
   (cond-> {:index-name name
            :key-schema (->keys keys)}
-    arg (assoc :non-key-attributes arg)
-    tag (assoc :projection-type tag)
+    arg (assoc-in [:projection :non-key-attributes] arg)
+    tag (assoc-in [:projection :projection-type] tag)
     throughput (assoc :provisioned-throughput
                       (->throughput throughput))))
 
@@ -190,7 +191,9 @@
   (lift-condition-expression m v {:out-key :filter-expression}))
 
 (defmethod transform-request-kv :where [k v m target]
-  (assoc m k (->key-conds v)))
+  (if (= target :scan)
+    (lift-condition-expression m v {:out-key :scan-filter})
+    (assoc m k (->key-conds v))))
 
 (defmethod transform-request-kv :when [k v m target]
   (lift-condition-expression m v))

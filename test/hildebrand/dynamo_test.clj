@@ -62,7 +62,7 @@
                        :table :hildebrand-test-table-list-tables)]
     (let [{:keys [tables] :as r} (list-tables!! creds {:limit 1})]
       (is (= 1 (count tables)))
-      (is (-> r meta :start-table)))))
+      (is (-> r meta :end-table)))))
 
 (deftest put+get
   (with-tables [create-table-default]

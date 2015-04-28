@@ -20,14 +20,17 @@
     (cond-> n
       (= "#" (subs n 0 1)) (subs 1))))
 
-(defn flatten-update-ops [m & [{:keys [path acc] :or {path [] acc []}}]]
-  (loop [[[k v :as kv] & m] (seq m) acc acc]
-    (let [path (conj path k)]
-      (cond
-        (nil? kv)   acc
-        (map? v)    (recur m (flatten-update-ops v {:path path :acc acc}))
-        (vector? v) (let [[op & args] v]
-                      (recur m (conj acc (into [op path] args))))))))
+(def path->col (fn-> name (str/split #"\." 2) first))
+
+(defn flatten-update-ops [m & [{:keys [path] :or {path []}}]]
+  (reduce
+   (fn [acc [k v]] 
+     (let [path (conj path k)]
+       (cond
+         (map? v)    (into acc (flatten-update-ops v {:path path}))
+         (vector? v) (let [[op & args] v]
+                       (conj acc (into [op path] args))))))
+   []  m))
 
 (defn parameterize-op [{:keys [op-name col path arg] :as op}]
   (let [{aliased-col :col :as op} (update op :col alias-col)
@@ -133,16 +136,15 @@
 
 (defn parameterize-arg [arg]
   (if (column-arg? arg)
-    {:args [(name arg)] :attrs {(name arg) (unalias-col arg)}}
+    (let [col (path->col arg)]
+      {:args [(name arg)] :attrs {col (unalias-col col)}})
     (let [g (->> (gensym) name (str ":"))]
       {:args [g] :values {g arg}})))
 
-(defn map-merge [f v]
-  (->> v (map f) (apply merge-with into)))
-
 (defn parameterize-args [args]
-  (let [m (map-merge parameterize-arg args)]
-    [(:args m) (dissoc m :args)]))
+  (let [{:keys [args] :as m}
+        (apply merge-with into (map parameterize-arg args))]
+    [args (dissoc m :args)]))
 
 (defn parameterize-expr [[op & args]]
   (if (logical-ops op)
@@ -169,7 +171,8 @@
   (group 'not arg))
 (defmulti-dispatch cond-expr-op->string
   (for-map [[in-op out-op] prefix-ops]
-    in-op (fn [[_ & args]] (str (name out-op) (group (arglist args))))))
+    in-op (fn [[_ & args]]
+            (str (name out-op) (group (arglist args))))))
 
 (defn cond-expr->string [expr]
   (walk/postwalk

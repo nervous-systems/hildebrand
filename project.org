@@ -1,0 +1,9 @@
+* Pre-Release
+** TODO Tidy up map transformation for incoming requests
+   SCHEDULED: <2015-05-03 Sun>
+** TODO Raise dynamo/ package to toplevel
+   SCHEDULED: <2015-05-03 Sun>
+** TODO Documentation generation
+** TODO Add paginated versions of sequence-returning functions
+** TODO Cleanup util packages
+   
