@@ -1,6 +1,6 @@
-(ns hildebrand.dynamo-test
+(ns hildebrand-test
   (:require
-   [hildebrand.dynamo :refer
+   [hildebrand :refer
     [put-item!! get-item!! delete-item!! update-item!! query!!
      describe-table! describe-table!! create-table!! update-table!!
      list-tables!! await-status!! ensure-table!! error->throwable]]
@@ -19,7 +19,7 @@
 (defn issue! [target content & [{:keys [throw] :or {throw true}}]]
   (go-catching
     (let [{:keys [hildebrand/error] :as resp}
-          (<? (hildebrand.dynamo/issue-request!
+          (<? (hildebrand/issue-request!
                {:target target :creds creds :max-retries 0 :body content}))]
       (if (and throw error)
         (throw (error->throwable error))

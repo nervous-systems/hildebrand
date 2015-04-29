@@ -1,5 +1,5 @@
-(ns hildebrand.dynamo.request-test
-  (:require [hildebrand.dynamo.request :refer :all]
+(ns hildebrand.request-test
+  (:require [hildebrand.request :refer :all]
 	    [clojure.test :refer :all]))
 
 (deftest create-table+

@@ -1,8 +1,7 @@
-(ns hildebrand.dynamo.request
+(ns hildebrand.request
   (:require [clojure.set :as set]
-            [hildebrand.dynamo.expr :as expr]
-            [hildebrand.dynamo.util :refer [throw-empty ddb-num? boolean? type-aliases-out]]
-            [hildebrand.util :refer [defmulti-dispatch]]
+            [hildebrand.expr :as expr]
+            [hildebrand.util :refer [throw-empty ddb-num? boolean? type-aliases-out defmulti-dispatch]]
             [plumbing.core :refer :all]))
 
 (defn to-set-attr [v]

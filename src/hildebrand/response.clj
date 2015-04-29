@@ -1,7 +1,6 @@
-(ns hildebrand.dynamo.response
+(ns hildebrand.response
   (:require [clojure.set :as set]
-            [hildebrand.dynamo.util :refer :all]
-            [hildebrand.util :refer [map-transformer defmulti-dispatch]]
+            [hildebrand.util :refer :all]
             [plumbing.core :refer :all]
             [clojure.walk :as walk]))
 
