@@ -8,6 +8,8 @@
   :global-vars {*warn-on-reflection* true}
   :source-paths ["src" "test"]
   :plugins [[codox "0.8.11"]]
+  :codox {:include [hildebrand]
+          :defaults {:doc/format :markdown}}
   :dependencies
   [[org.clojure/clojure    "1.6.0"]
    [org.clojure/core.async "0.1.346.0-17112a-alpha"]

@@ -98,7 +98,7 @@
   (assoc m k v))
 
 (defmethod transform-request-kv :attrs [k v m target]
-  (if (= target :create-table)
+  (if (#{:create-table :update-table} target)
     (assoc m :attribute-definitions (map ->attr-value v))
     (lift-projection-expression m v)))
 
@@ -121,9 +121,6 @@
 (defmethod prepare-request :default [_ body]
   body)
 
-(defmethod prepare-request :default [_ body]
-  body)
-
 (defn restructure-request [target body]
   (rename
    (reduce
@@ -140,21 +137,30 @@
   (assoc m k (->throughput v)))
 
 (defn restructure-index [{:keys [name throughput keys] [tag & [arg]] :project :as m}]
-  (cond-> {:index-name name
-           :key-schema (->keys keys)}
-    arg (assoc-in [:projection :non-key-attributes] arg)
-    tag (assoc-in [:projection :projection-type] tag)
+  (cond-> {:index-name name}
+    keys (assoc :key-schema (->keys keys))
+    arg  (assoc-in [:projection :non-key-attributes] arg)
+    tag  (assoc-in [:projection :projection-type] tag)
     throughput (assoc :provisioned-throughput
                       (->throughput throughput))))
 
-(defmethod transform-request-kv :indexes [k {:keys [global local]} m parent]
+(defmethod transform-request-kv :indexes [k v m parent]
   (case parent
     :create-table
-    (cond-> m 
-      (not-empty global) (assoc :global-secondary-indexes
-                                (map restructure-index global)) 
-      (not-empty local)  (assoc :local-secondary-indexes
-                                (map restructure-index local)))))
+    (let [{:keys [global local]} v]
+      (cond-> m 
+        (not-empty global) (assoc :global-secondary-indexes
+                                  (map restructure-index global)) 
+        (not-empty local)  (assoc :local-secondary-indexes
+                                  (map restructure-index local))))
+    :update-table
+    (let [tagged-mods
+          (apply concat
+                 (for [mod-key #{:create :delete :update}]
+                   (for [mod (v mod-key)]
+                     {mod-key (restructure-index mod)})))]
+      (assoc m :global-secondary-index-updates
+             tagged-mods))))
 
 (defn ->batch-req [type m]
   (let [m (->item m)]

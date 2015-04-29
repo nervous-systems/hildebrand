@@ -2,6 +2,20 @@
   (:require [hildebrand.request :refer :all]
 	    [clojure.test :refer :all]))
 
+(def gs-index-out
+  {:index-name :users-by-id
+   :key-schema [{:attribute-name "id" :key-type :hash}]
+   :projection {:projection-type :include 
+                :non-key-attributes [:x :y]}
+   :provisioned-throughput
+   {:read-capacity-units 1 :write-capacity-units 5}})
+
+(def gs-index-in
+  {:name :users-by-id
+   :keys [:id]
+   :project [:include [:x :y]]
+   :throughput {:read 1 :write 5}})
+
 (deftest create-table+
   (is (= {:table-name :users
           :attribute-definitions
@@ -10,12 +24,7 @@
            {:attribute-name "timestamp" :attribute-type :N}]
           :key-schema [{:attribute-name "email" :key-type :hash}]
           :global-secondary-indexes
-          [{:index-name :users-by-id
-            :key-schema [{:attribute-name "id" :key-type :hash}]
-            :projection {:projection-type :include 
-                         :non-key-attributes [:x :y]}
-            :provisioned-throughput
-            {:read-capacity-units 1 :write-capacity-units 5}}]
+          [gs-index-out]
           :local-secondary-indexes
           [{:index-name :users-by-timestamp
             :key-schema
@@ -30,10 +39,7 @@
            :attrs {:id :string :email :S :timestamp :number}
            :keys [:email]
            :indexes
-           {:global [{:name :users-by-id
-                      :keys [:id]
-                      :project [:include [:x :y]]
-                      :throughput {:read 1 :write 5}}]
+           {:global [gs-index-in]
             :local [{:name :users-by-timestamp
                      :keys [:email :timestamp]
                      :project [:keys-only]}]}
@@ -100,7 +106,7 @@
           :return-item-collection-metrics true}
          (restructure-request
           :update-item
-          {:table-name :users
+          {:table :users
            :key {:user-id "Moe"}
            :return :all-new
            :metrics true}))))
@@ -111,6 +117,36 @@
           :consistent-read true}
          (restructure-request
           :get-item
-          {:table-name :users
+          {:table :users
            :key {:foo "bar"}
            :consistent true}))))
+
+(deftest update-table+
+  (is (= {:table-name :users
+          :attribute-definitions [{:attribute-name "x"
+                                   :attribute-type :S}]
+          :global-secondary-index-updates
+          #{{:create gs-index-out}
+            {:delete {:index-name :amazing-index}}
+            {:update {:index-name :other-index
+                      :provisioned-throughput
+                      {:read-capacity-units 1
+                       :write-capacity-units 1}}}}
+          :provisioned-throughput
+          {:read-capacity-units 5 :write-capacity-units 3}}
+         (-> (restructure-request
+              :update-table
+              {:attrs {:x :string}
+               :table :users
+               :indexes {:create [gs-index-in]
+                         :delete [{:name :amazing-index}]
+                         :update [{:name :other-index
+                                   :throughput {:read 1 :write 1}}]}
+               :throughput {:read 5 :write 3}})
+             (update-in [:global-secondary-index-updates] (partial into #{}))))))
+
+(deftest describe-table+
+  (is (= {:table-name :users}
+         (restructure-request
+          :describe-table
+          {:table :users}))))

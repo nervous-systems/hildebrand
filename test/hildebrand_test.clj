@@ -3,7 +3,8 @@
    [hildebrand :refer
     [put-item!! get-item!! delete-item!! update-item!! query!!
      describe-table! describe-table!! create-table!! update-table!!
-     list-tables!! await-status!! ensure-table!! error->throwable]]
+     list-tables!! await-status!! ensure-table!! error->throwable
+     batch-write-item!! batch-get-item!!]]
    [hildebrand.util :refer :all]
    [glossop :refer [<?! <? go-catching]]
    [clojure.test :refer :all]
@@ -16,19 +17,8 @@
   {:access-key (get (System/getenv) "AWS_ACCESS_KEY")
    :secret-key (get (System/getenv) "AWS_SECRET_KEY")})
 
-(defn issue! [target content & [{:keys [throw] :or {throw true}}]]
-  (go-catching
-    (let [{:keys [hildebrand/error] :as resp}
-          (<? (hildebrand/issue-request!
-               {:target target :creds creds :max-retries 0 :body content}))]
-      (if (and throw error)
-        (throw (error->throwable error))
-        resp))))
-
-(def issue!!        (comp <?! issue!))
-(def batch-write    (partial issue!! :batch-write-item))
-
 (def table :hildebrand-test-table)
+
 (def create-table-default
   {:table table
    :throughput {:read 1 :write 1}
@@ -47,7 +37,7 @@
 (defn with-items* [specs f]
   (with-tables* (keys specs)
     (fn []
-      (batch-write {:put (map-keys :table specs)})
+      (batch-write-item!! creds {:put (map-keys :table specs)})
       (f))))
 
 (defmacro with-items [specs & body]
@@ -208,15 +198,15 @@
 
 (deftest batch-write+
   (with-tables [create-table-default]
-    (is (empty? (issue!! :batch-write-item {:put {table items}})))))
+    (is (empty? (batch-write-item!! creds {:put {table items}})))))
 
 (deftest batch-write+get
   (with-tables [create-table-default]
-    (issue!! :batch-write-item {:put {table items}})
-    (let [responses (issue!!
-                     :batch-get-item
-                     {:items {table {:consistent true :keys items}}})]
-      (is (= (into #{} items) (into #{} (responses table)))))))
+    (batch-write-item!! creds {:put {table items}})
+    (let [responses (batch-get-item!!
+                     creds {table {:consistent true :keys items}})]
+      (is (= (into #{} items)
+             (into #{} (responses table)))))))
 
 (deftest query+
   (with-items {create-table-default [{:name "Mephistopheles"}]}

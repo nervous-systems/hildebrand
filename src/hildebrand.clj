@@ -32,38 +32,62 @@
 (defmethod error->throwable :default [{:keys [type message] :as error}]
   (ex-info (name type) error))
 
-(defn issue-targeted-request! [target creds request & [mangle]]
+(defn issue-targeted-request! [target creds request]
   (go-catching
     (let [{:keys [hildebrand/error] :as resp}
 	  (<? (issue-request! {:target target :creds creds :body request}))]
       (if error
 	(error->throwable error)
-	(cond-> resp mangle mangle)))))
+	resp))))
 
-(defmacro defissuer [target-name args & [mangle]]
-  (let [fname!  (-> target-name name (str "!"))
-	fname!! (str fname! "!")
+(defmacro defissuer [target-name args & [doc]]
+  (let [fname!  (-> target-name name (str "!") symbol)
+	fname!! (-> target-name name (str "!!") symbol)
 	args'   (into '[creds] (conj args '& '[extra]))
 	body  `(issue-targeted-request!
 		~(keyword target-name) ~'creds
-		(merge (plumbing.map/keyword-map ~@args) ~'extra)
-		~(or mangle identity))]
+		(merge (plumbing.map/keyword-map ~@args) ~'extra))
+        md     (cond-> (meta target-name)
+                 doc (assoc :doc doc))]
     `(do
-       (defn ~(symbol fname!)  ~args' ~body)
-       (defn ~(symbol fname!!) ~args' (<?! ~body)))))
+       (defn ~(with-meta fname!  md) ~args' ~body)
+       (defn ~(with-meta fname!! md) ~args' (<?! ~body)))))
 
-(defissuer get-item    [table key])
-(defissuer update-item [table key update])
-(defissuer delete-item [table key])
-(defissuer put-item    [table item])
+(defissuer get-item [table key]
+  "`key` is a map containing enough keys (either hash, or hash+range) to
+uniquely identify an item in this table/index.")
+(defissuer update-item [table key update]
+  "`key` is a map containing enough keys (either hash, or hash+range) to
+uniquely identify an item in this table.
+
+`update` is a map of item attribute names to attribute values.
+
+Returns an empty map unless `:return` is set to a reasonable value.")
+(defissuer delete-item [table key]
+  "`key` is a map containing enough keys (either hash, or hash+range) to
+uniquely identify an item in this table.
+
+Returns an empty map unless `:return` is set to to `:all-old`.")
+(defissuer put-item [table item]
+  "`item` is a map of attribute names to attribute values.
+
+Returns an empty map unless `:return` is set to `:all-old`, and the put
+overwrites an existing item." )
 (defissuer describe-table [table])
 (defissuer update-table   [table])
 (defissuer list-tables    [])
 (defissuer create-table   [])
-(defissuer query          [table where])
+(defissuer query          [table where]
+  "`where` is a map of keys (either hash, or hash+range) to tagged comparison
+ instructions, e.g. `{:hash [:= \"Hello\"] :range [:< 5]}`")
 (defissuer delete-table   [table])
-(defissuer batch-write-item [])
-(defissuer batch-get-item [])
+(defissuer batch-write-item []
+  "Accepts `:put` and `:delete` keys, each optionally being set to a map of
+table names to either lists of items to insert, or keys identifying items to
+delete." )
+(defissuer batch-get-item [items]
+  "`items` is a map of table names to get requests, each a map containing at
+ least `keys`, a list of keys identifying items to retrieve." )
 
 (defn table-status! [creds table]
   (go-catching

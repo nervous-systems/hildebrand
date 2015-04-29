@@ -7,3 +7,4 @@
 ** TODO Add paginated versions of sequence-returning functions
 ** TODO Cleanup util packages
 ** TODO Add & test scan function
+** TODO Test update-table
