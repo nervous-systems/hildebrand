@@ -1,8 +1,8 @@
 * Pre-Release
 ** DONE Tidy up map transformation for incoming maps
    CLOSED: [2015-04-29 Wed 00:59] SCHEDULED: <2015-05-03 Sun>
-** DONE Raise dynamo/ package to toplevel
-   CLOSED: [2015-04-29 Wed 17:30] SCHEDULED: <2015-05-03 Sun>
+** TODO Raise dynamo/ package to toplevel
+   SCHEDULED: <2015-05-03 Sun>
 ** TODO Documentation generation
 ** TODO Add paginated versions of sequence-returning functions
 ** TODO Cleanup util packages

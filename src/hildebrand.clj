@@ -74,7 +74,9 @@ Returns an empty map unless `:return` is set to to `:all-old`.")
 Returns an empty map unless `:return` is set to `:all-old`, and the put
 overwrites an existing item." )
 (defissuer describe-table [table])
-(defissuer update-table   [table])
+(defissuer update-table   [table attrs]
+  "`attrs` is a map of attribute names to symbolic types, describing the
+attributes of the table." )
 (defissuer list-tables    [])
 (defissuer create-table   [])
 (defissuer query          [table where]
