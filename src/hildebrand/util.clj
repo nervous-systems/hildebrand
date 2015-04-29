@@ -1,9 +1,7 @@
 (ns hildebrand.util
-  (:require
-   [clojure.set :as set]
-   [plumbing.core :refer :all]
-   [clojure.walk :as walk])
-  (:import [clojure.lang BigInt]))
+  (:require [clojure.set :as set]
+            [plumbing.core :refer :all])
+  (:import (clojure.lang BigInt)))
 
 ;; Experiments, mostly
 

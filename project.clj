@@ -15,6 +15,5 @@
    [org.clojure/core.async "0.1.346.0-17112a-alpha"]
    [io.nervous/eulalie     "0.1.1-SNAPSHOT"]
    [io.nervous/glossop     "0.1.0-SNAPSHOT"]
-   [prismatic/plumbing     "0.4.1"]
-   [com.velisco/herbert    "0.6.7"]]
+   [prismatic/plumbing     "0.4.1"]]
   :exclusions [[org.clojure/clojure]])

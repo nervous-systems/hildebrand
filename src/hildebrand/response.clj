@@ -1,8 +1,8 @@
 (ns hildebrand.response
   (:require [clojure.set :as set]
+            [clojure.walk :as walk]
             [hildebrand.util :refer :all]
-            [plumbing.core :refer :all]
-            [clojure.walk :as walk]))
+            [plumbing.core :refer :all]))
 
 (defn from-attr-value [m]
   (let [[[tag value]] (seq m)]

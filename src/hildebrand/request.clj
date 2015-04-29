@@ -1,7 +1,8 @@
 (ns hildebrand.request
   (:require [clojure.set :as set]
             [hildebrand.expr :as expr]
-            [hildebrand.util :refer [throw-empty ddb-num? boolean? type-aliases-out defmulti-dispatch]]
+            [hildebrand.util :refer [boolean? ddb-num? throw-empty
+                                     type-aliases-out]]
             [plumbing.core :refer :all]))
 
 (defn to-set-attr [v]

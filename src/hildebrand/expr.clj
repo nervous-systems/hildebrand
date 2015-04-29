@@ -1,11 +1,9 @@
 (ns hildebrand.expr
-  (:require
-   [clojure.set :as set]
-   [clojure.string :as str]
-   [hildebrand.util :refer :all]
-   [clojure.walk :as walk]
-   [plumbing.core :refer :all]
-   [plumbing.map :refer [keyword-map]]))
+  (:require [clojure.string :as str]
+            [clojure.walk :as walk]
+            [hildebrand.util :refer :all]
+            [plumbing.core :refer :all]
+            [plumbing.map :refer [keyword-map]]))
 
 (defn aliased-col? [x]
   (and (or (keyword? x) (string? x))
