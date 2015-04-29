@@ -1,17 +1,12 @@
 (ns hildebrand-test
-  (:require
-   [hildebrand :refer
-    [put-item!! get-item!! delete-item!! update-item!! query!!
-     describe-table! describe-table!! create-table!! update-table!!
-     list-tables!! await-status!! ensure-table!! error->throwable
-     batch-write-item!! batch-get-item!!]]
-   [hildebrand.util :refer :all]
-   [glossop :refer [<?! <? go-catching]]
-   [clojure.test :refer :all]
-   [plumbing.core :refer :all]
-   [clojure.core.async :as async]
-   [clojure.walk :as walk])
-  (:import [clojure.lang ExceptionInfo]))
+  (:require [clojure.test :refer :all]
+            [clojure.walk :as walk]
+            [hildebrand :refer [batch-get-item!! batch-write-item!!
+                                delete-item!! describe-table!!
+                                ensure-table!! get-item!! list-tables!!
+                                put-item!! query!! update-item!!]]
+            [plumbing.core :refer :all])
+  (:import (clojure.lang ExceptionInfo)))
 
 (def creds
   {:access-key (get (System/getenv) "AWS_ACCESS_KEY")

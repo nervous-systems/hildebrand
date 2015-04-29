@@ -1,6 +1,6 @@
 (ns hildebrand.request-test
-  (:require [hildebrand.request :refer :all]
-	    [clojure.test :refer :all]))
+  (:require [clojure.test :refer :all]
+            [hildebrand.request :refer :all]))
 
 (def gs-index-out
   {:index-name :users-by-id

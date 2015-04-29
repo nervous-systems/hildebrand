@@ -1,6 +1,6 @@
 (ns hildebrand.response-test
-  (:require [hildebrand.response :refer :all]
-            [clojure.test :refer :all]))
+  (:require [clojure.test :refer :all]
+            [hildebrand.response :refer :all]))
 
 (def table-description-out
   {:table-description
