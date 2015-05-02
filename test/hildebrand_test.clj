@@ -2,42 +2,9 @@
   (:require [clojure.test :refer [deftest is]]
             [clojure.walk :as walk]
             [hildebrand :as h]
-            [plumbing.core :refer [map-keys dissoc-in]])
+            [plumbing.core :refer [map-keys dissoc-in]]
+            [hildebrand.test-util :refer :all])
   (:import (clojure.lang ExceptionInfo)))
-
-(def creds
-  {:access-key (get (System/getenv) "AWS_ACCESS_KEY")
-   :secret-key (get (System/getenv) "AWS_SECRET_KEY")})
-
-(def table :hildebrand-test-table)
-
-(def create-table-default
-  {:table table
-   :throughput {:read 1 :write 1}
-   :attrs {:name :string}
-   :keys  [:name]})
-
-(defn with-tables* [specs f]
-  (doseq [{:keys [table] :as spec} specs]
-    (h/ensure-table!! creds spec))
-  (f))
-
-(defmacro with-tables [specs & body]
-  `(with-tables* ~specs
-     (fn [] ~@body)))
-
-(defn with-items* [specs f]
-  (let [table-name->keys (map-keys :table specs)]
-    (println table-name->keys)
-    (with-tables* (keys specs)
-      (fn []
-        (h/batch-write-item!! creds {:put table-name->keys})
-        (f)))))
-
-
-(defmacro with-items [specs & body]
-  `(with-items* ~specs
-     (fn [] ~@body)))
 
 (def item {:name "Mephistopheles"})
 
@@ -208,28 +175,6 @@
     (is (= [{:name "Mephistopheles"}]
            (map #(select-keys % #{:name})
                 (:items (h/query!! creds table {:name [:eq "Mephistopheles"]})))))))
-
-(def indexed-table :hildebrand-test-table-indexed)
-(def local-index   :hildebrand-test-table-indexed-local)
-(def global-index  :hildebrand-test-table-indexed-global)
-(def create-global-index
-  {:name global-index
-   :keys [:game-title :timestamp]
-   :project [:keys-only]
-   :throughput {:read 1 :write 1}})
-
-(def create-table-indexed
-  {:table indexed-table
-   :throughput {:read 1 :write 1}
-   :attrs {:user-id :string :game-title :string :timestamp :number}
-   :keys  [:user-id :game-title]
-   :indexes
-   {:local
-    [{:name local-index
-      :keys [:user-id :timestamp]
-      :project [:include [:data]]}]
-    :global
-    [create-global-index]}})
 
 (def ->game-item (partial zipmap [:user-id :game-title :timestamp :data]))
 (def indexed-items (map ->game-item [["moe" "Super Metroid" 1 "great"]

@@ -87,6 +87,7 @@
    :metrics     :return-item-collection-metrics
    :return      :return-values
    :start-table :exclusive-start-table-name
+   :start-key   :exclusive-start-key
    :consistent  :consistent-read
    :where       :key-conditions
    :sort        :scan-index-forward
