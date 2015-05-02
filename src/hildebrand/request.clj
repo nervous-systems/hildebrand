@@ -194,12 +194,11 @@
            t (restructure-request :get-item req))))
 
 (defmethod transform-request-kv :filter [k v m target]
-  (lift-condition-expression m v {:out-key :filter-expression}))
+  (lift-condition-expression
+   m v {:out-key :filter-expression}))
 
 (defmethod transform-request-kv :where [k v m target]
-  (if (= target :scan)
-    (lift-condition-expression m v {:out-key :scan-filter})
-    (assoc m k (->key-conds v))))
+  (assoc m k (->key-conds v)))
 
 (defmethod transform-request-kv :when [k v m target]
   (lift-condition-expression m v))

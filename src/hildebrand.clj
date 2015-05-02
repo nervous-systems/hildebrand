@@ -90,6 +90,7 @@ delete." )
 (defissuer batch-get-item [items]
   "`items` is a map of table names to get requests, each a map containing at
  least `keys`, a list of keys identifying items to retrieve." )
+(defissuer scan [table])
 
 (defn table-status! [creds table]
   (go-catching

@@ -27,10 +27,13 @@
      (fn [] ~@body)))
 
 (defn with-items* [specs f]
-  (with-tables* (keys specs)
-    (fn []
-      (h/batch-write-item!! creds {:put (map-keys :table specs)})
-      (f))))
+  (let [table-name->keys (map-keys :table specs)]
+    (println table-name->keys)
+    (with-tables* (keys specs)
+      (fn []
+        (h/batch-write-item!! creds {:put table-name->keys})
+        (f)))))
+
 
 (defmacro with-items [specs & body]
   `(with-items* ~specs
@@ -268,3 +271,13 @@
     (is (= create-table-indexed
            (-> (h/describe-table!! creds indexed-table)
                cleanup-description)))))
+
+(deftest scan+
+  (let [items (for [i (range 5)]
+                {:name     (str "scan-test-" i)
+                 :religion "scan-test"})]
+    (with-items {create-table-default items}
+      (is (= (into #{} items)
+             (into #{} (:items
+                        (h/scan!! creds table
+                                  {:filter [:= :#religion "scan-test"]}))))))))

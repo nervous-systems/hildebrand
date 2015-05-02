@@ -6,5 +6,9 @@
 ** TODO Documentation generation
 ** TODO Add paginated versions of sequence-returning functions
 ** TODO Cleanup util packages
-** TODO Add & test scan function
-** TODO Test update-table
+** DONE Add & test scan function
+   CLOSED: [2015-05-02 Sat 19:18]
+** DONE Test update-table
+   CLOSED: [2015-04-29 Wed 21:19]
+** TODO Support arithmetic, etc. in updates
+** TODO Alias nested path names in updates, e.g. {:x {:y {:count [:set 5]}}}
