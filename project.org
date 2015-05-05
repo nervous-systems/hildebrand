@@ -4,13 +4,15 @@
 ** DONE Raise dynamo/ package to toplevel
    CLOSED: [2015-05-05 Tue 18:42] SCHEDULED: <2015-05-03 Sun>
 ** TODO Documentation generation
-** TODO Add paginated versions of sequence-returning functions
+** DONE Add paginated versions of sequence-returning functions
+   CLOSED: [2015-05-05 Tue 22:56]
 ** TODO Cleanup util packages
 ** DONE Add & test scan function
    CLOSED: [2015-05-02 Sat 19:18]
 ** DONE Test update-table
    CLOSED: [2015-04-29 Wed 21:19]
-** TODO Support arithmetic, etc. in updates
-** TODO Alias nested path names in updates, e.g. {:x {:y {:count [:set 5]}}}
+** DONE Support arithmetic, etc. in updates
+   CLOSED: [2015-05-05 Tue 23:54]
 ** DONE Spurious crc32 mismatch in eulalie on scan?
    CLOSED: [2015-05-05 Tue 18:42]
+** TODO Return :items + metadata from sequence returning fns

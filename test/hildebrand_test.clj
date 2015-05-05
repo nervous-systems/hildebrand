@@ -154,6 +154,13 @@
    {:a {:b {0 [:remove]}}}
    {:a {:b []}}))
 
+(deftest update-item+inc+dec
+  (update-test
+   {:a 5 :b 4}
+   {:a [:inc 4]
+    :b [:dec 4]}
+   {:a 9 :b 0}))
+
 (def items
   (for [i (range 5)]
     (assoc item :name (str "batch-write-" i))))

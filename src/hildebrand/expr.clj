@@ -54,24 +54,32 @@
        (str acc "." (name part))))
    (str col) path))
 
-(defn arg->call [fn-name col arg]
-  (format "%s(%s, %s)" fn-name col arg))
+(defmulti  arg->call (fn [fn-name col arg] fn-name))
+(defmethod arg->call :default [fn-name col arg]
+  (format "%s(%s, %s)" (name fn-name) col arg))
+(defmethod arg->call :+ [_ col arg]
+  (format "%s + %s" col (or arg 1)))
+(defmethod arg->call :- [_ col arg]
+  (format "%s - %s" col (or arg 1)))
 
 (defn new-op-name [op op-name]
   (assoc op :op-name op-name))
 
-(defn op->set [fn-name {:keys [col path] :as op} params]
+(defn op->set [fn-name {:keys [col path arg] :as op} params]
   (let [col+path (col+path->string (into [col] path))]
-    [(-> op
-         (new-op-name :set)
-         (update :arg (partial arg->call fn-name col+path))) params]))
+    [(assoc op
+            :op-name :set
+            :arg (arg->call fn-name col+path arg))
+     params]))
 
 (defmulti  rewrite-op (fn [{:keys [op-name]} params] op-name))
 (defmethod rewrite-op :default [op params] [op params])
 (defmulti-dispatch
   rewrite-op
-  {:append (partial op->set 'list_append)
-   :init   (partial op->set 'if_not_exists)})
+  {:append (partial op->set :list_append)
+   :init   (partial op->set :if_not_exists)
+   :inc    (partial op->set :+)
+   :dec    (partial op->set :-)})
 
 (defmethod rewrite-op :concat [{:keys [arg] :as op} {:keys [values] :as params}]
   (if (set? (values arg))
