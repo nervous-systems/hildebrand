@@ -174,7 +174,7 @@
   (with-items {create-table-default [{:name "Mephistopheles"}]}
     (is (= [{:name "Mephistopheles"}]
            (map #(select-keys % #{:name})
-                (:items (h/query!! creds table {:name [:eq "Mephistopheles"]})))))))
+                (:items (h/query!! creds table {:name [:= "Mephistopheles"]})))))))
 
 (def ->game-item (partial zipmap [:user-id :game-title :timestamp :data]))
 (def indexed-items (map ->game-item [["moe" "Super Metroid" 1 "great"]

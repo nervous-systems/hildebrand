@@ -134,11 +134,12 @@
   (and (keyword? a) (-> a name (subs 0 1) (= "#"))))
 
 (defn parameterize-arg [arg]
-  (if (column-arg? arg)
-    (let [col (path->col arg)]
-      {:args [(name arg)] :attrs {col (unalias-col col)}})
-    (let [g (->> (gensym) name (str ":"))]
-      {:args [g] :values {g arg}})))
+  (let [g (name (gensym))]
+    (if (column-arg? arg)
+      (let [col (path->col arg)]
+        {:args  [(str "#" g)]
+         :attrs {(str "#" g) (unalias-col col)}})
+      {:args [(str ":" g)] :values {(str ":" g) arg}})))
 
 (defn parameterize-args [args]
   (let [{:keys [args] :as m}

@@ -15,20 +15,16 @@
          (recur (next vs)))
        true))))
 
-(defn query! [creds table where & [{:keys [limit] :as extra} {:keys [chan maximum]}]]
+(defn paginate! [f input {:keys [limit maximum chan]}]
   (assert (or limit chan)
           "Please supply either a page-size (limit) or output channel")
   (let [chan (or chan (async/chan limit))]
     (go-catching
       (try
         (loop [start-key nil n 0]
-          (log/info "OK" start-key n)
           (let [{:keys [items last-evaluated-key]}
-                (<? (h/query! creds table where
-                              (cond-> extra start-key
-                                      (assoc :start-key start-key))))
+                (<? (f (cond-> input start-key (assoc :start-key start-key))))
                 n (+ n (count items))]
-            (log/info "WRITING ONTO CHAN " items)
             (if (and (<? (onto-chan? chan items))
                      last-evaluated-key
                      (or (not maximum) (< n maximum)))
@@ -38,3 +34,15 @@
           (async/>! chan e)
           (async/close! chan))))
     chan))
+
+(defn query! [creds table where {:keys [limit] :as extra} & [{:keys [chan maximum]}]]
+  (paginate!
+   (partial h/query! creds table where)
+   extra
+   {:limit limit :maximum maximum :chan chan}))
+
+(defn scan! [creds table {:keys [limit] :as extra} & [{:keys [chan maximum]}]]
+  (paginate!
+   (partial h/scan! creds table)
+   extra
+   {:limit limit :maximum maximum :chan chan}))

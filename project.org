@@ -1,8 +1,8 @@
 * Pre-Release
 ** DONE Tidy up map transformation for incoming maps
    CLOSED: [2015-04-29 Wed 00:59] SCHEDULED: <2015-05-03 Sun>
-** TODO Raise dynamo/ package to toplevel
-   SCHEDULED: <2015-05-03 Sun>
+** DONE Raise dynamo/ package to toplevel
+   CLOSED: [2015-05-05 Tue 18:42] SCHEDULED: <2015-05-03 Sun>
 ** TODO Documentation generation
 ** TODO Add paginated versions of sequence-returning functions
 ** TODO Cleanup util packages
@@ -12,3 +12,5 @@
    CLOSED: [2015-04-29 Wed 21:19]
 ** TODO Support arithmetic, etc. in updates
 ** TODO Alias nested path names in updates, e.g. {:x {:y {:count [:set 5]}}}
+** DONE Spurious crc32 mismatch in eulalie on scan?
+   CLOSED: [2015-05-05 Tue 18:42]
