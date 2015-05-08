@@ -19,5 +19,5 @@
 ** DONE Return :items + metadata from sequence returning fns
    CLOSED: [2015-05-08 Fri 14:54]
 ** DONE Return nil from item retrieval fns
-   CLOSED: [2015-05-08 Fri 14:54]
+   CLOSED: [2015-05-08 Fri 14:55]
 ** TODO Take a position on the handling of unprocessed items from batch requests

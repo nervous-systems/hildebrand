@@ -1,20 +1,24 @@
 (ns hildebrand-test
   (:require [clojure.test :refer [deftest is]]
-            [clojure.walk :as walk]
-            [hildebrand :as h]
-            [plumbing.core :refer [map-keys dissoc-in]]
-            [hildebrand.test-util :refer :all])
+	    [clojure.walk :as walk]
+	    [hildebrand :as h]
+	    [plumbing.core :refer [map-keys dissoc-in]]
+	    [hildebrand.test-util :refer :all])
   (:import (clojure.lang ExceptionInfo)))
 
 (def item {:name "Mephistopheles"})
 
 (deftest list-tables+
   (with-tables [create-table-default
-                (assoc create-table-default
-                       :table :hildebrand-test-table-list-tables)]
+		(assoc create-table-default
+		       :table :hildebrand-test-table-list-tables)]
     (let [tables (h/list-tables!! creds {:limit 1})]
       (is (= 1 (count tables)))
       (is (-> tables meta :end-table)))))
+
+(deftest get+nonexistent
+  (with-tables [create-table-default]
+    (is (nil? (h/get-item!! creds table {:name "rofl"})))))
 
 (deftest put+get
   (with-tables [create-table-default]
@@ -24,10 +28,10 @@
 (deftest put+conditional
   (with-items {create-table-default [item]}
     (is (= :conditional-check-failed-exception
-           (try
-             (h/put-item!! creds table item {:when [:not-exists :#name]})
-             (catch ExceptionInfo e
-               (-> e ex-data :type)))))))
+	   (try
+	     (h/put-item!! creds table item {:when [:not-exists :#name]})
+	     (catch ExceptionInfo e
+	       (-> e ex-data :type)))))))
 
 (deftest put+returning
   (with-tables [create-table-default]
@@ -48,47 +52,47 @@
 (deftest delete+cc
   (with-items {create-table-default [item]}
     (is (= table
-           (->
-            (h/delete-item!! creds table item {:capacity :total})
-            meta
-            :capacity
-            :table)))))
+	   (->
+	    (h/delete-item!! creds table item {:capacity :total})
+	    meta
+	    :capacity
+	    :table)))))
 
 (deftest delete+expected-expr
   (with-items {create-table-default [(assoc item :age 33 :hobby "Strolling")]}
     (is (empty?
-         (h/delete-item!!
-          creds table item
-          {:when
-           [:and
-            [:<= 30 :#age]
-            [:<= :#age 34]
-            [:or
-             [:begins-with :#hobby "St"]
-             [:begins-with :#hobby "Tro"]]]})))))
+	 (h/delete-item!!
+	  creds table item
+	  {:when
+	   [:and
+	    [:<= 30 :#age]
+	    [:<= :#age 34]
+	    [:or
+	     [:begins-with :#hobby "St"]
+	     [:begins-with :#hobby "Tro"]]]})))))
 
 (deftest delete+expected-expr-neg
   (with-items {create-table-default [(assoc item :age 33)]}
     (is (= :conditional-check-failed-exception
-           (try
-             (h/delete-item!!
-              creds table item
-              {:when
-               [:and
-                [:or
-                 [:between :#age 10 30]
-                 [:between :#age 33 40]]
-                [:exists :#garbage]]})
-             (catch ExceptionInfo e
-               (-> e ex-data :type)))))))
+	   (try
+	     (h/delete-item!!
+	      creds table item
+	      {:when
+	       [:and
+		[:or
+		 [:between :#age 10 30]
+		 [:between :#age 33 40]]
+		[:exists :#garbage]]})
+	     (catch ExceptionInfo e
+	       (-> e ex-data :type)))))))
 
 (defn update-test [attrs-in updates attrs-out]
   (let [keyed-item (merge item attrs-in)
-        expected   (merge item attrs-out)]
+	expected   (merge item attrs-out)]
     (with-items {create-table-default [keyed-item]}
       (is (= expected
-             (h/update-item!!
-              creds table item updates {:return :all-new}))))))
+	     (h/update-item!!
+	      creds table item updates {:return :all-new}))))))
 
 (deftest update-item+
   (update-test
@@ -173,41 +177,41 @@
   (with-tables [create-table-default]
     (h/batch-write-item!! creds {:put {table items}})
     (let [responses (h/batch-get-item!!
-                     creds {table {:consistent true :keys items}})]
+		     creds {table {:consistent true :keys items}})]
       (is (= (into #{} items)
-             (into #{} (responses table)))))))
+	     (into #{} (responses table)))))))
 
 (deftest query+
   (with-items {create-table-default [{:name "Mephistopheles"}]}
     (is (= [{:name "Mephistopheles"}]
-           (map #(select-keys % #{:name})
-                (h/query!! creds table {:name [:= "Mephistopheles"]}))))))
+	   (map #(select-keys % #{:name})
+		(h/query!! creds table {:name [:= "Mephistopheles"]}))))))
 
 (def ->game-item (partial zipmap [:user-id :game-title :timestamp :data]))
 (def indexed-items (map ->game-item [["moe" "Super Metroid" 1 "great"]
-                                     ["moe" "Wii Fit" 2]]))
+				     ["moe" "Wii Fit" 2]]))
 
 (deftest query+local-index
   (with-items {create-table-indexed indexed-items}
     (is (= [(first indexed-items)]
-           (h/query!!
-            creds indexed-table {:user-id [:= "moe"] :timestamp [:< 2]}
-            {:index local-index})))))
+	   (h/query!!
+	    creds indexed-table {:user-id [:= "moe"] :timestamp [:< 2]}
+	    {:index local-index})))))
 
 (deftest query+filter
   (with-items {create-table-indexed indexed-items}
     (is (= [(first indexed-items)]
-           (h/query!!
-            creds indexed-table {:user-id [:= "moe"]}
-            {:filter [:< :#timestamp 2]})))))
+	   (h/query!!
+	    creds indexed-table {:user-id [:= "moe"]}
+	    {:filter [:< :#timestamp 2]})))))
 
 (deftest query+global-index
   (with-items {create-table-indexed indexed-items}
     (is (= [(-> indexed-items first (dissoc :data))]
-           (h/query!!
-            creds indexed-table {:game-title [:= "Super Metroid"]
-                                 :timestamp  [:< 2]}
-            {:index global-index})))))
+	   (h/query!!
+	    creds indexed-table {:game-title [:= "Super Metroid"]
+				 :timestamp  [:< 2]}
+	    {:index global-index})))))
 
 (def cleanup-description
   (partial
@@ -221,14 +225,14 @@
 (deftest describe-complex-table
   (with-tables [create-table-indexed]
     (is (= create-table-indexed
-           (-> (h/describe-table!! creds indexed-table)
-               cleanup-description)))))
+	   (-> (h/describe-table!! creds indexed-table)
+	       cleanup-description)))))
 
 (deftest scan+
   (let [items (for [i (range 5)]
-                {:name     (str "scan-test-" i)
-                 :religion "scan-test"})]
+		{:name     (str "scan-test-" i)
+		 :religion "scan-test"})]
     (with-items {create-table-default items}
       (is (= (into #{} items)
-             (into #{} (h/scan!! creds table
-                                 {:filter [:= :#religion "scan-test"]})))))))
+	     (into #{} (h/scan!! creds table
+				 {:filter [:= :#religion "scan-test"]})))))))
