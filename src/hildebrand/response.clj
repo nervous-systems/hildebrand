@@ -2,7 +2,8 @@
   (:require [clojure.set :as set]
             [clojure.walk :as walk]
             [hildebrand.util :refer :all]
-            [plumbing.core :refer :all]))
+            [plumbing.core :refer :all]
+            [clojure.tools.logging :as log]))
 
 (defn from-attr-value [m]
   (let [[[tag value]] (seq m)]
@@ -118,10 +119,22 @@
 (defmulti  restructure-response* (fn [target m] target))
 (defmethod restructure-response* :default [_ m] m)
 (defmethod restructure-response* :get-item [_ {:keys [item] :as m}]
-  (with-meta (or item {}) (dissoc m :item)))
+  ;; If anything except the item appears in the response (e.g. capacity, etc.)
+  ;; then default to the empty map so we can associate metadata with it.
+  ;; It's not ideal, but I'm not sure what is.
+  (let [m    (not-empty (dissoc m :item))
+        item (cond-> (not-empty item) m (or {}))]
+    (when item
+      (with-meta item m))))
 
 (defmethod restructure-response* :list-tables [_ {:keys [tables end-table]}]
-  (with-meta {:tables tables} {:end-table end-table}))
+  (with-meta tables {:end-table end-table}))
+
+(defmethod restructure-response* :query [_ {:keys [items] :as m}]
+  (with-meta (or items []) (dissoc m :items)))
+
+(defmethod restructure-response* :scan [_ {:keys [items] :as m}]
+  (with-meta (or items []) (dissoc m :items)))
 
 (defn error [type message & [data]]
   (assoc data :hildebrand/error {:type type :message message}))
@@ -147,6 +160,7 @@
   {:consumed-capacity :capacity
    :attributes        :item
    :table-names       :tables
+   :item-collection-metrics :metrics
    :last-evaluated-table-name :end-table
    :unprocessed-items :unprocessed})
 

@@ -15,4 +15,9 @@
    CLOSED: [2015-05-05 Tue 23:54]
 ** DONE Spurious crc32 mismatch in eulalie on scan?
    CLOSED: [2015-05-05 Tue 18:42]
-** TODO Return :items + metadata from sequence returning fns
+** TODO Alias all elements in update path
+** DONE Return :items + metadata from sequence returning fns
+   CLOSED: [2015-05-08 Fri 14:54]
+** DONE Return nil from item retrieval fns
+   CLOSED: [2015-05-08 Fri 14:54]
+** TODO Take a position on the handling of unprocessed items from batch requests

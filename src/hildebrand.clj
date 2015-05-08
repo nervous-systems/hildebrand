@@ -34,9 +34,8 @@
 
 (defn issue-targeted-request! [target creds request]
   (go-catching
-    (let [{:keys [hildebrand/error] :as resp}
-	  (<? (issue-request! {:target target :creds creds :body request}))]
-      (if error
+    (let [resp (<? (issue-request! {:target target :creds creds :body request}))]
+      (if-let [error (when (map? resp) (:hildebrand/error resp))]
 	(error->throwable error)
 	resp))))
 

@@ -12,9 +12,9 @@
   (with-tables [create-table-default
                 (assoc create-table-default
                        :table :hildebrand-test-table-list-tables)]
-    (let [{:keys [tables] :as r} (h/list-tables!! creds {:limit 1})]
+    (let [tables (h/list-tables!! creds {:limit 1})]
       (is (= 1 (count tables)))
-      (is (-> r meta :end-table)))))
+      (is (-> tables meta :end-table)))))
 
 (deftest put+get
   (with-tables [create-table-default]
@@ -181,7 +181,7 @@
   (with-items {create-table-default [{:name "Mephistopheles"}]}
     (is (= [{:name "Mephistopheles"}]
            (map #(select-keys % #{:name})
-                (:items (h/query!! creds table {:name [:= "Mephistopheles"]})))))))
+                (h/query!! creds table {:name [:= "Mephistopheles"]}))))))
 
 (def ->game-item (partial zipmap [:user-id :game-title :timestamp :data]))
 (def indexed-items (map ->game-item [["moe" "Super Metroid" 1 "great"]
@@ -190,24 +190,24 @@
 (deftest query+local-index
   (with-items {create-table-indexed indexed-items}
     (is (= [(first indexed-items)]
-           (:items (h/query!!
-                    creds indexed-table {:user-id [:= "moe"] :timestamp [:< 2]}
-                    {:index local-index}))))))
+           (h/query!!
+            creds indexed-table {:user-id [:= "moe"] :timestamp [:< 2]}
+            {:index local-index})))))
 
 (deftest query+filter
   (with-items {create-table-indexed indexed-items}
     (is (= [(first indexed-items)]
-           (:items (h/query!!
-                    creds indexed-table {:user-id [:= "moe"]}
-                    {:filter [:< :#timestamp 2]}))))))
+           (h/query!!
+            creds indexed-table {:user-id [:= "moe"]}
+            {:filter [:< :#timestamp 2]})))))
 
 (deftest query+global-index
   (with-items {create-table-indexed indexed-items}
     (is (= [(-> indexed-items first (dissoc :data))]
-           (:items (h/query!!
-                    creds indexed-table {:game-title [:= "Super Metroid"]
-                                         :timestamp  [:< 2]}
-                    {:index global-index}))))))
+           (h/query!!
+            creds indexed-table {:game-title [:= "Super Metroid"]
+                                 :timestamp  [:< 2]}
+            {:index global-index})))))
 
 (def cleanup-description
   (partial
@@ -230,6 +230,5 @@
                  :religion "scan-test"})]
     (with-items {create-table-default items}
       (is (= (into #{} items)
-             (into #{} (:items
-                        (h/scan!! creds table
-                                  {:filter [:= :#religion "scan-test"]}))))))))
+             (into #{} (h/scan!! creds table
+                                 {:filter [:= :#religion "scan-test"]})))))))
