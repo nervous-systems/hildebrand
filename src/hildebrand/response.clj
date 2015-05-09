@@ -42,14 +42,14 @@
    :index-status :status
    :item-count :count
    :key-schema :keys
-   :projection :project 
+   :projection :project
    :provisioned-throughput :throughput})
 
 (def ->global-index
   (fn->
    (update :key-schema ->key-schema)
    (update :projection ->projection)
-   (update :provisioned-throughput ->throughput) 
+   (update :provisioned-throughput ->throughput)
    (set/rename-keys index-renames)))
 
 (def ->local-index (fn-> ->global-index (dissoc :throughput)))
@@ -87,7 +87,7 @@
 (defn ->table-description [m]
   (set/rename-keys
    (reduce
-    (fn [acc [k v]] 
+    (fn [acc [k v]]
       (transform-table-kv k v acc))
     nil m)
    table-description-renames))
@@ -142,8 +142,8 @@
 (defn maybe-unprocessed-error [unprocessed]
   (when (not-empty unprocessed)
     (error :unprocessed-items
-	   (format "%d unprocessed items" (count unprocessed))
-	   {:unprocessed unprocessed})))
+           (format "%d unprocessed items" (count unprocessed))
+           {:unprocessed unprocessed})))
 
 (defmethod restructure-response* :batch-get-item [_ {:keys [unprocessed responses] :as m}]
   (or (maybe-unprocessed-error unprocessed)
@@ -153,7 +153,7 @@
         m)))
 
 (defmethod restructure-response* :batch-write-item [_ {:keys [unprocessed] :as resp}]
-  (or (maybe-unprocessed-error unprocessed) 
+  (or (maybe-unprocessed-error unprocessed)
       (with-meta {} resp)))
 
 (def renames
@@ -162,6 +162,7 @@
    :table-names       :tables
    :item-collection-metrics :metrics
    :last-evaluated-table-name :end-table
+   :last-evaluated-key        :end-key
    :unprocessed-items :unprocessed})
 
 (def structure-groups
@@ -175,7 +176,7 @@
   (let [m (reduce
            (fn [acc [k v]]
              (transform-response-kv k v acc target))
-           nil m)] 
+           nil m)]
     (restructure-response*
      (structure-groups target target)
      (set/rename-keys m renames))))

@@ -5,6 +5,13 @@
             [plumbing.core :refer :all]
             [plumbing.map :refer [keyword-map]]))
 
+(defn path-reader
+  "Abstraction!"
+  [x]
+  (with-meta x (assoc (meta x) :hildebrand/path true)))
+
+(def hildebrand-path? (fn-> meta :hildebrand/path))
+
 (defn aliased-col? [x]
   (and (or (keyword? x) (string? x))
        (-> x name (subs 0 1) (= "#"))))
@@ -13,6 +20,12 @@
   (let [n (name x)]
     (cond->> n
       (not (aliased-col? n)) (str "#"))))
+
+(defn alias-col+path [segments]
+  (map #(cond-> %
+          (or (string? %) (keyword? %))
+          alias-col)
+       segments))
 
 (defn unalias-col [x]
   (let [n (name x)]
@@ -23,28 +36,13 @@
 
 (defn flatten-update-ops [m & [{:keys [path] :or {path []}}]]
   (reduce
-   (fn [acc [k v]] 
+   (fn [acc [k v]]
      (let [path (conj path k)]
        (cond
          (map? v)    (into acc (flatten-update-ops v {:path path}))
          (vector? v) (let [[op & args] v]
                        (conj acc (into [op path] args))))))
    []  m))
-
-(defn parameterize-op [{:keys [op-name col path arg] :as op}]
-  (let [{aliased-col :col :as op} (update op :col alias-col)
-        attrs {aliased-col (unalias-col col)}]
-    (if (aliased-col? arg)
-      (let [arg (name arg)] 
-        [(assoc op :arg arg)
-         {:attrs (assoc attrs arg (unalias-col arg))}])
-      (let [g (->> (gensym) name (str ":"))]
-        [(assoc op :arg g)
-         {:attrs attrs
-          :values {g arg}}]))))
-
-(defn explode-op [[op-name [col & path] arg :as op]]
-  (keyword-map op-name col path arg))
 
 (defn col+path->string [[col & path]]
   (reduce
@@ -54,19 +52,48 @@
        (str acc "." (name part))))
    (str col) path))
 
+(defn attrs-for-path [segments]
+  (into {}
+    (for [segment segments :when (or (string? segment)
+                                     (keyword? segment))]
+      [segment (unalias-col segment)])))
+
+(defn parameterize-op [{:keys [op-name col+path arg] :as op}]
+  (let [{aliased-col+path :col+path :as op} (update op :col+path alias-col+path)
+        attrs (attrs-for-path aliased-col+path)]
+    (cond
+      (hildebrand-path? arg)
+      (let [aliased-arg-path (alias-col+path arg)]
+        [(assoc op :arg (col+path->string aliased-arg-path))
+         {:attrs (merge attrs (attrs-for-path aliased-arg-path))}])
+
+      (aliased-col? arg)
+      (let [arg (name arg)]
+        [(assoc op :arg arg)
+         {:attrs (assoc attrs arg (unalias-col arg))}])
+
+      :else
+      (let [g (->> (gensym) name (str ":"))]
+        [(assoc op :arg g)
+         {:attrs attrs
+          :values {g arg}}]))))
+
+(defn explode-op [[op-name col+path arg :as op]]
+  (keyword-map op-name col+path arg))
+
 (defmulti  arg->call (fn [fn-name col arg] fn-name))
 (defmethod arg->call :default [fn-name col arg]
   (format "%s(%s, %s)" (name fn-name) col arg))
 (defmethod arg->call :+ [_ col arg]
-  (format "%s + %s" col (or arg 1)))
+  (format "%s + %s" col arg))
 (defmethod arg->call :- [_ col arg]
-  (format "%s - %s" col (or arg 1)))
+  (format "%s - %s" col arg))
 
 (defn new-op-name [op op-name]
   (assoc op :op-name op-name))
 
-(defn op->set [fn-name {:keys [col path arg] :as op} params]
-  (let [col+path (col+path->string (into [col] path))]
+(defn op->set [fn-name {:keys [col+path arg] :as op} params]
+  (let [col+path (col+path->string col+path)]
     [(assoc op
             :op-name :set
             :arg (arg->call fn-name col+path arg))
@@ -96,8 +123,8 @@
              (apply map vector))]
     [ops (apply merge-with into param-maps)]))
 
-(defn op->vector [{:keys [op-name col path arg]}]
-  (cond-> [(name op-name) (col+path->string (into [col] path))]
+(defn op->vector [{:keys [op-name col+path arg]}]
+  (cond-> [(name op-name) (col+path->string col+path)]
     (not= arg :hildebrand/no-arg) (conj arg)))
 
 (defmulti  op->string (fn [op-name op] op-name))

@@ -22,13 +22,14 @@
     (go-catching
       (try
         (loop [start-key nil n 0]
-          (let [{:keys [items last-evaluated-key]}
-                (<? (f (cond-> input start-key (assoc :start-key start-key))))
-                n (+ n (count items))]
+          (let [items (<? (f (cond-> input start-key
+                                     (assoc :start-key start-key))))
+                n (+ n (count items))
+                {:keys [end-key]} (meta items)]
             (if (and (<? (onto-chan? chan items))
-                     last-evaluated-key
+                     end-key
                      (or (not maximum) (< n maximum)))
-              (recur last-evaluated-key n)
+              (recur end-key n)
               (async/close! chan))))
         (catch Exception e
           (async/>! chan e)

@@ -5,7 +5,7 @@
 (def gs-index-out
   {:index-name :users-by-id
    :key-schema [{:attribute-name "id" :key-type :hash}]
-   :projection {:projection-type :include 
+   :projection {:projection-type :include
                 :non-key-attributes [:x :y]}
    :provisioned-throughput
    {:read-capacity-units 1 :write-capacity-units 5}})

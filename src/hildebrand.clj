@@ -6,25 +6,24 @@
    [clojure.core.async :as async]
    [eulalie]
    [eulalie.dynamo]
-   [glossop :refer :all :exclude [fn-> fn->>]] 
-   [hildebrand.util :refer :all]
+   [glossop :refer :all :exclude [fn-> fn->>]]
    [hildebrand.util :refer :all]
    [hildebrand.request :refer [restructure-request]]
-   [hildebrand.response :refer [restructure-response]] 
+   [hildebrand.response :refer [restructure-response]]
    [plumbing.core :refer :all]
    [plumbing.map]))
 
 (defn issue-request! [{:keys [target] :as req}]
   (go-catching
     (let [resp (-> req
-		   (assoc :service :dynamo)
-		   (update :body (partial restructure-request target))
-		   eulalie/issue-request!
-		   <?
-		   (set/rename-keys {:error :hildebrand/error}))]
+                   (assoc :service :dynamo)
+                   (update :body (partial restructure-request target))
+                   eulalie/issue-request!
+                   <?
+                   (set/rename-keys {:error :hildebrand/error}))]
       (if (:hildebrand/error resp)
-	resp
-	(restructure-response target (:body resp))))))
+        resp
+        (restructure-response target (:body resp))))))
 
 (def issue-request!! (comp <?! issue-request!))
 
@@ -36,16 +35,16 @@
   (go-catching
     (let [resp (<? (issue-request! {:target target :creds creds :body request}))]
       (if-let [error (when (map? resp) (:hildebrand/error resp))]
-	(error->throwable error)
-	resp))))
+        (error->throwable error)
+        resp))))
 
 (defmacro defissuer [target-name args & [doc]]
   (let [fname!  (-> target-name name (str "!") symbol)
-	fname!! (-> target-name name (str "!!") symbol)
-	args'   (into '[creds] (conj args '& '[extra]))
-	body  `(issue-targeted-request!
-		~(keyword target-name) ~'creds
-		(merge (plumbing.map/keyword-map ~@args) ~'extra))
+        fname!! (-> target-name name (str "!!") symbol)
+        args'   (into '[creds] (conj args '& '[extra]))
+        body  `(issue-targeted-request!
+                ~(keyword target-name) ~'creds
+                (merge (plumbing.map/keyword-map ~@args) ~'extra))
         md     (cond-> (meta target-name)
                  doc (assoc :doc doc))]
     `(do
@@ -96,8 +95,8 @@ delete." )
     (try
       (-> (describe-table! creds table) <? :status)
       (catch clojure.lang.ExceptionInfo e
-	(when-not (= :resource-not-found-exception (-> e ex-data :type))
-	  (throw e))))))
+        (when-not (= :resource-not-found-exception (-> e ex-data :type))
+          (throw e))))))
 
 (def table-status!! (comp <?! table-status!))
 
@@ -105,11 +104,11 @@ delete." )
   (go-catching
     (loop []
       (let [status' (<? (table-status! creds table))]
-	(cond (nil? status')     nil
-	      (= status status') status'
-	      :else (do
-		      (<? (async/timeout 1000))
-		      (recur)))))))
+        (cond (nil? status')     nil
+              (= status status') status'
+              :else (do
+                      (<? (async/timeout 1000))
+                      (recur)))))))
 
 (def await-status!! (comp <?! await-status!))
 
@@ -117,8 +116,8 @@ delete." )
   (go-catching
     (let [status (<? (table-status! creds table))]
       (when-not status
-	(<? (create-table! creds create)))
+        (<? (create-table! creds create)))
       (when-not (= :active status)
-	(<? (await-status! creds table :active))))))
+        (<? (await-status! creds table :active))))))
 
 (def ensure-table!! (comp <?! ensure-table!))

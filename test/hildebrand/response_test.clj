@@ -15,7 +15,7 @@
     [{:index-name :gs-index
       :key-schema [{:attribute-name :age :key-type :hash}
                    {:attribute-name :something :key-type :range}]
-      :projection {:projection-type :include 
+      :projection {:projection-type :include
                    :non-key-attributes [:something-else]}
       :provisioned-throughput {:read 1 :write 1}}]}})
 

@@ -21,7 +21,7 @@
       (ddb-num? v) {:N (str v)}
       (vector?  v) {:L (map to-attr-value v)}
       (map?     v)     {:M (for-map [[k v'] v]
-			     (name k) (to-attr-value v'))}
+                             (name k) (to-attr-value v'))}
       (set?     v) (to-set-attr v)
       :else (throw (Exception. (str "Invalid value " (type v)))))))
 
@@ -34,7 +34,7 @@
 (defn ->key-conds [conds]
   (for-map [[col [op & args]] conds]
     col {:attribute-value-list (map to-attr-value args)
-	 :comparison-operator  (comparison-ops op op)}))
+         :comparison-operator  (comparison-ops op op)}))
 
 (def ->key-schema
   (partial
@@ -54,7 +54,7 @@
            (into {}
              (for [col v :when (expr/aliased-col? col)]
                [col (expr/unalias-col col)]))
-	   :projection-expression v)))
+           :projection-expression v)))
 
 (defn lift-expression [req v out-key]
   (if-let [{:keys [expr values attrs]} (map-vals not-empty v)]
@@ -150,9 +150,9 @@
   (case parent
     :create-table
     (let [{:keys [global local]} v]
-      (cond-> m 
+      (cond-> m
         (not-empty global) (assoc :global-secondary-indexes
-                                  (map restructure-index global)) 
+                                  (map restructure-index global))
         (not-empty local)  (assoc :local-secondary-indexes
                                   (map restructure-index local))))
     :update-table
