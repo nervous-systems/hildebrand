@@ -67,6 +67,8 @@
            [:and
             [:<= 30 #hildebrand/path [:age]]
             [:<= [:age] 34]
+            [:in [:age] [30 33 34]]
+            [:not [:in [:age] #{30 34}]]
             [:or
              [:begins-with [:hobby] "St"]
              [:begins-with [:hobby] "Tro"]]]})))))

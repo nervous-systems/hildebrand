@@ -169,11 +169,16 @@
 (defmulti  parameterize-args (fn [op segment->alias] (:op-name op)))
 (defmethod parameterize-args :default
   [{:keys [op-name args] :as op} segment->alias]
-  (let [args+attrs (apply merge-with into
-                          (map #(parameterize-arg % segment->alias) args))]
-    (assoc args+attrs :op-name op-name)))
+  (-> (apply merge-with into
+             (map #(parameterize-arg % segment->alias) args))
+      (assoc :op-name op-name)))
 
-;; XXX in
+(defmethod parameterize-args :in
+  [{[col+path coll] :args :as op} segment->alias]
+  (-> (apply merge-with into
+             (parameterize-arg col+path segment->alias)
+             (map #(parameterize-arg % segment->alias) coll))
+      (assoc :op-name :in)))
 
 (def logical-ops #{:and :or :not})
 
@@ -183,8 +188,8 @@
   represents an attribute path"
   #{:= :contains :in})
 
-(defn resolve-args [{:keys [args] :as op}]
-  (if (structural-ops op)
+(defn resolve-args [{:keys [op-name args] :as op}]
+  (if (structural-ops op-name)
     (update-in op [:args 0] ->hildebrand-path)
     (assoc op :args (map ->hildebrand-path args))))
 
@@ -221,7 +226,7 @@
   (apply group (interpose (name op) args)))
 (defmethod cond-expr-op->string :between [[op x y z]]
   (group x (name op) y 'and z))
-(defmethod cond-expr-op->string :in [[op x xs]]
+(defmethod cond-expr-op->string :in [[op x & xs]]
   (group x (name op) (group (arglist xs))))
 (defmethod cond-expr-op->string :not [[op arg]]
   (group 'not arg))
