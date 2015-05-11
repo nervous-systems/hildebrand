@@ -1,4 +1,4 @@
-(defproject io.nervous/hildebrand "0.1.0-SNAPSHOT"
+(defproject io.nervous/hildebrand "0.2.0-SNAPSHOT"
   :description "High-level, asynchronous AWS client library"
   :url "https://github.com/nervous-systems/hildebrand"
   :License {:name "Unlicense" :url "http://unlicense.org/UNLICENSE"}
