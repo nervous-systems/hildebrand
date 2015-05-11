@@ -5,26 +5,31 @@
             [plumbing.core :refer :all]
             [plumbing.map :refer [keyword-map]]))
 
-(defn path-reader
-  "Abstraction!"
-  [x]
-  (with-meta x (assoc (meta x) :hildebrand/path true)))
+(defn ->hildebrand-path [x]
+  (if (coll? x)
+    (with-meta x (assoc (meta x) :hildebrand/path true))
+    x))
 
-(def hildebrand-path? (fn-> meta :hildebrand/path))
+(def path-reader
+  "Abstraction!"
+  ->hildebrand-path)
+
+(defn hildebrand-path?  [x]
+  (and (coll? x) (:hildebrand/path (meta x))))
 
 (defn aliased-col? [x]
-  (and (or (keyword? x) (string? x))
+  (and (str-or-keyword? x)
        (-> x name (subs 0 1) (= "#"))))
 
-(defn alias-col [x]
+(defn alias-col [x segment->alias]
   (let [n (name x)]
     (cond->> n
-      (not (aliased-col? n)) (str "#"))))
+      (not (aliased-col? n)) segment->alias)))
 
-(defn alias-col+path [segments]
+(defn alias-col+path [segments segment->alias]
   (map #(cond-> %
-          (or (string? %) (keyword? %))
-          alias-col)
+          (str-or-keyword? %)
+          (alias-col segment->alias))
        segments))
 
 (defn unalias-col [x]
@@ -52,25 +57,20 @@
        (str acc "." (name part))))
    (str col) path))
 
-(defn attrs-for-path [segments]
+(defn path->attrs [segments segment->alias]
   (into {}
-    (for [segment segments :when (or (string? segment)
-                                     (keyword? segment))]
-      [segment (unalias-col segment)])))
+    (for [segment segments :when (str-or-keyword? segment)]
+      [(segment->alias (name segment)) (name segment)])))
 
-(defn parameterize-op [{:keys [op-name col+path arg] :as op}]
-  (let [{aliased-col+path :col+path :as op} (update op :col+path alias-col+path)
-        attrs (attrs-for-path aliased-col+path)]
+(defn parameterize-op [{:keys [op-name col+path arg] :as op} segment->alias]
+  (let [{aliased-col+path :col+path :as op}
+        (update op :col+path alias-col+path segment->alias)
+        attrs (path->attrs col+path segment->alias)]
     (cond
       (hildebrand-path? arg)
-      (let [aliased-arg-path (alias-col+path arg)]
+      (let [aliased-arg-path (alias-col+path arg segment->alias)]
         [(assoc op :arg (col+path->string aliased-arg-path))
-         {:attrs (merge attrs (attrs-for-path aliased-arg-path))}])
-
-      (aliased-col? arg)
-      (let [arg (name arg)]
-        [(assoc op :arg arg)
-         {:attrs (assoc attrs arg (unalias-col arg))}])
+         {:attrs (merge attrs (path->attrs arg segment->alias))}])
 
       :else
       (let [g (->> (gensym) name (str ":"))]
@@ -116,10 +116,12 @@
 (defmethod rewrite-op :remove [{:keys [arg] :as op} params]
   [(assoc op :arg :hildebrand/no-arg) (dissoc-in params [:values arg])])
 
-(defn parameterize-ops [ops]
+(defn parameterize-ops [ops segment->alias]
   (let [[ops param-maps]
         (->> ops
-             (map (fn->> explode-op parameterize-op (apply rewrite-op)))
+             (map (fn [op] (apply rewrite-op
+                                  (parameterize-op (explode-op op)
+                                                   segment->alias))))
              (apply map vector))]
     [ops (apply merge-with into param-maps)]))
 
@@ -153,41 +155,54 @@
   (let [[ops {:keys [attrs values] :as params}]
         (-> m
             flatten-update-ops
-            parameterize-ops)
+            (parameterize-ops (memoized-fn _ [_] (str "#" (gensym)))))
         ops (group-by :op-name ops)]
     (assoc params :expr (ops->string ops))))
 
-(def logical-ops #{:and :or :not})
-
-(def prefix-ops
-  {:begins-with :begins_with
-   :not-exists  :attribute_not_exists
-   :exists      :attribute_exists
-   :contains    :contains})
-
-(defn column-arg? [a]
-  (and (keyword? a) (-> a name (subs 0 1) (= "#"))))
-
-(defn parameterize-arg [arg]
-  (let [g (name (gensym))]
-    (if (column-arg? arg)
-      (let [col (path->col arg)]
-        {:args  [(str "#" g)]
-         :attrs {(str "#" g) (unalias-col col)}})
+(defn parameterize-arg [arg segment->alias]
+  (if (hildebrand-path? arg)
+    {:args  [(col+path->string (alias-col+path arg segment->alias))]
+     :attrs (path->attrs arg segment->alias)}
+    (let [g (name (gensym))]
       {:args [(str ":" g)] :values {(str ":" g) arg}})))
 
-(defn parameterize-args [args]
-  (let [{:keys [args] :as m}
-        (apply merge-with into (map parameterize-arg args))]
-    [args (dissoc m :args)]))
+(defmulti  parameterize-args (fn [op segment->alias] (:op-name op)))
+(defmethod parameterize-args :default
+  [{:keys [op-name args] :as op} segment->alias]
+  (let [args+attrs (apply merge-with into
+                          (map #(parameterize-arg % segment->alias) args))]
+    (assoc args+attrs :op-name op-name)))
 
-(defn parameterize-expr [[op & args]]
+;; XXX in
+
+(def logical-ops #{:and :or :not})
+
+(def structural-ops
+  "These can accept sequences as their second parameter, as opposed to,
+  e.g. less than / greater than, for which we will always assume a vector
+  represents an attribute path"
+  #{:= :contains :in})
+
+(defn resolve-args [{:keys [args] :as op}]
+  (if (structural-ops op)
+    (update-in op [:args 0] ->hildebrand-path)
+    (assoc op :args (map ->hildebrand-path args))))
+
+(defn parameterize-expr [[op & args] segment->alias]
   (if (logical-ops op)
-    (let [[sub-ops param-maps] (apply map vector (map parameterize-expr args))
-          params               (apply merge-with into param-maps)]
-      [(into [op] sub-ops) params])
-    (let [[args params] (parameterize-args args)]
-      [(into [op] args) params])))
+    (-> (reduce
+         (fn [{:keys [args values attrs]} arg]
+           (let [{args' :args vals' :values attrs' :attrs op :op-name}
+                 (parameterize-expr arg segment->alias)]
+             {:args   (conj args (into [op] args'))
+              :values (merge values vals')
+              :attrs  (merge attrs attrs')}))
+         {}
+         args)
+        (assoc :op-name op))
+    (-> {:op-name op :args (vec args)}
+        resolve-args
+        (parameterize-args segment->alias))))
 
 (defn group [& rest]
   (str "(" (str/join " " rest) ")"))
@@ -195,12 +210,18 @@
 (defn arglist [xs]
   (str/join ", " xs))
 
+(def prefix-ops
+  {:begins-with :begins_with
+   :not-exists  :attribute_not_exists
+   :exists      :attribute_exists
+   :contains    :contains})
+
 (defmulti  cond-expr-op->string (fn [[op & args]] op))
 (defmethod cond-expr-op->string :default [[op & args]]
   (apply group (interpose (name op) args)))
 (defmethod cond-expr-op->string :between [[op x y z]]
   (group x (name op) y 'and z))
-(defmethod cond-expr-op->string :in [[op x & xs]]
+(defmethod cond-expr-op->string :in [[op x xs]]
   (group x (name op) (group (arglist xs))))
 (defmethod cond-expr-op->string :not [[op arg]]
   (group 'not arg))
@@ -217,5 +238,8 @@
    expr))
 
 (defn cond-expr->statement [expr]
-  (let [[expr params] (parameterize-expr expr)]
-    (assoc params :expr (cond-expr->string expr))))
+  (let [{:keys [op-name args values attrs] :as params}
+        (parameterize-expr expr (memoized-fn _ [_] (str "#" (gensym))))]
+    {:attrs  attrs
+     :values values
+     :expr   (cond-expr->string (into [op-name] args))}))

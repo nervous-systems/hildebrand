@@ -29,7 +29,7 @@
   (with-items {create-table-default [item]}
     (is (= :conditional-check-failed-exception
            (try
-             (h/put-item!! creds table item {:when [:not-exists :#name]})
+             (h/put-item!! creds table item {:when [:not-exists [:name]]})
              (catch ExceptionInfo e
                (-> e ex-data :type)))))))
 
@@ -65,11 +65,11 @@
           creds table item
           {:when
            [:and
-            [:<= 30 :#age]
-            [:<= :#age 34]
+            [:<= 30 #hildebrand/path [:age]]
+            [:<= [:age] 34]
             [:or
-             [:begins-with :#hobby "St"]
-             [:begins-with :#hobby "Tro"]]]})))))
+             [:begins-with [:hobby] "St"]
+             [:begins-with [:hobby] "Tro"]]]})))))
 
 (deftest delete+expected-expr-neg
   (with-items {create-table-default [(assoc item :age 33)]}
@@ -80,9 +80,9 @@
               {:when
                [:and
                 [:or
-                 [:between :#age 10 30]
-                 [:between :#age 33 40]]
-                [:exists :#garbage]]})
+                 [:between [:age] 10 30]
+                 [:between [:age] 33 40]]
+                [:exists [:garbage]]]})
              (catch ExceptionInfo e
                (-> e ex-data :type)))))))
 
@@ -174,7 +174,9 @@
 (deftest update-item+refer
   (update-test
    {:please {:init "ialize"} :me ", boss!"}
-   {:please {:init [:set :#me]} :and [:init :#me]}
+   {:please
+    {:init [:set  #hildebrand/path [:me]]}
+     :and  [:init #hildebrand/path [:me]]}
    {:please {:init ", boss!"} :and ", boss!" :me ", boss!"}))
 
 (deftest update-item+nested-refer
@@ -222,7 +224,7 @@
     (is (= [(first indexed-items)]
            (h/query!!
             creds indexed-table {:user-id [:= "moe"]}
-            {:filter [:< :#timestamp 2]})))))
+            {:filter [:< [:timestamp] 2]})))))
 
 (deftest query+global-index
   (with-items {create-table-indexed indexed-items}
@@ -254,4 +256,4 @@
     (with-items {create-table-default items}
       (is (= (into #{} items)
              (into #{} (h/scan!! creds table
-                                 {:filter [:= :#religion "scan-test"]})))))))
+                                 {:filter [:= [:religion] "scan-test"]})))))))

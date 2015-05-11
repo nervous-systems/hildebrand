@@ -35,4 +35,4 @@
   (with-items {create-table-indexed items}
     (is (= items (greedy-scan!!
                   {:limit 1
-                   :filter [:= :#user-id "page-test"]})))))
+                   :filter [:= [:user-id] "page-test"]})))))

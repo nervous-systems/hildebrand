@@ -5,35 +5,24 @@
 
 ;; Experiments, mostly
 
-(defmacro if-> [test val then else]
-  `(let [val# ~val]
-     (if ~test
-       (-> val# ~then)
-       (-> val# ~else))))
+(defn stroll [inner outer state form]
+  (if-not (coll? form)
+    (outer state form)
+    (let [[state form']
+          (reduce
+           (fn [[s f] x]
+             (let [[s f'] (inner s x)]
+               [s (conj f f')]))
+           [state []]
+           form)
+          form (cond
+                 (instance? clojure.lang.IMapEntry form) (vec form')
+                 (seq? form) (doall form')
+                 :else (into (empty form) form'))]
+      (outer state form))))
 
-(defmacro branch-> [x & conds]
-  "Short-circuiting cond-> with anaphoric predicates.
-   (branch-> x p? y) -> (cond-> (-> x p?) y)"
-  (let [g     (gensym)
-        conds (mapcat (fn [[l r]] `((-> ~g ~l) ~r)) (partition 2 conds))]
-    `(let [~g ~x]
-       (cond-> ~g ~@conds))))
-
-(defmacro branch->> [x & conds]
-  (let [g     (gensym)
-        conds (mapcat (fn [[l r]] `((->> ~g ~l) ~r)) (partition 2 conds))]
-    `(let [~g ~x]
-       (cond->> ~g ~@conds))))
-
-(defmacro branch [x & conds]
-  (let [g     (gensym)
-        else  (when (odd? (count conds)) (last conds))
-        conds (mapcat (fn [[l r]] `((~l ~x) ~r)) (partition 2 conds))]
-    `(let [~g ~x]
-       (cond ~@conds :else ~else))))
-
-(defn key-renamer [spec]
-  (fn [m] (set/rename-keys m spec)))
+(defn post-stroll [f state form]
+  (stroll (partial post-stroll f) f state form))
 
 (defn transform-map [spec m]
   (into {}
@@ -47,15 +36,6 @@
             [new-name (transform v)]))
         [k v]))))
 
-(defn map-transformer [spec]
-  (partial transform-map spec))
-
-(defn mapper [& args]
-  (apply partial map args))
-
-(defn reducer [& args]
-  (apply partial reduce args))
-
 (defn defmulti-dispatch [method v->handler]
   (doseq [[v handler] v->handler]
     (defmethod method v [& args] (apply handler args))))
@@ -65,7 +45,7 @@
 (defn- assert-precision [x]
   (let [^BigDecimal dec (if (string? x) (BigDecimal. ^String x) (bigdec x))]
     (assert (<= (.precision dec) 38)
-	    (str "DynamoDB numbers have <= 38 digits of precision."))
+            (str "DynamoDB numbers have <= 38 digits of precision."))
     true))
 
 ;; Taken from Faraday
@@ -111,3 +91,5 @@
 (def type-aliases-in
   (for-map [[k v] type-aliases-out]
     v k))
+
+(def str-or-keyword? (some-fn string? keyword?))
