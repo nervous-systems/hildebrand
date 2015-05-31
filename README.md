@@ -1,5 +1,7 @@
 # hildebrand [![Build Status](https://travis-ci.org/nervous-systems/hildebrand.svg?branch=master)](https://travis-ci.org/nervous-systems/hildebrand)
 
+[![Clojars Project](http://clojars.org/io.nervous/hildebrand/latest-version.svg)](http://clojars.org/io.nervous/hildebrand)
+
 Undocumented, high-level, pure Clojure asynchronous AWS client.
 
 ## License
