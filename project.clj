@@ -1,7 +1,7 @@
 (defproject io.nervous/hildebrand "0.2.1"
   :description "High-level, asynchronous AWS client library"
   :url "https://github.com/nervous-systems/hildebrand"
-  :License {:name "Unlicense" :url "http://unlicense.org/UNLICENSE"}
+  :license {:name "Unlicense" :url "http://unlicense.org/UNLICENSE"}
   :scm {:name "git" :url "https://github.com/nervous-systems/hildebrand"}
   :deploy-repositories [["clojars" {:creds :gpg}]]
   :signing {:gpg-key "moe@nervous.io"}
@@ -13,7 +13,7 @@
   :dependencies
   [[org.clojure/clojure    "1.6.0"]
    [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-   [io.nervous/eulalie     "0.1.1-SNAPSHOT"]
-   [io.nervous/glossop     "0.1.0-SNAPSHOT"]
+   [io.nervous/eulalie     "0.1.1"]
+   [io.nervous/glossop     "0.1.0"]
    [prismatic/plumbing     "0.4.1"]]
   :exclusions [[org.clojure/clojure]])
