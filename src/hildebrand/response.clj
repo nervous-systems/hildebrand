@@ -14,7 +14,7 @@
       :L    (mapv     from-attr-value value)
       :BOOL (boolean value)
       :NULL nil
-      :SS   (into #{} value)
+      :SS   (into #{} (map keyword value))
       :NS   (into #{} (map string->number value)))))
 
 (defn ->attr-def [{:keys [attribute-name attribute-type]}]

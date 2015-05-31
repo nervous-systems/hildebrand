@@ -1,15 +1,16 @@
 (ns hildebrand.request
-  (:require [clojure.set :as set]
+  (:require [glossop :refer [stringy?]]
+            [clojure.set :as set]
             [hildebrand.expr :as expr]
-            [hildebrand.util :refer [boolean? ddb-num? throw-empty
-                                     type-aliases-out]]
+            [hildebrand.util :refer
+             [boolean? ddb-num? throw-empty type-aliases-out]]
             [plumbing.core :refer :all]))
 
 (defn to-set-attr [v]
   (let [v (throw-empty v)]
     (cond
-      (every? string? v)  {:SS (map name v)}
-      (every? ddb-num? v) {:NS (map str     v)}
+      (every? stringy? v)  {:SS (map name v)}
+      (every? ddb-num? v)  {:NS (map str     v)}
       :else (throw (Exception. "Invalid set type")))))
 
 (defn to-attr-value [v]
@@ -73,7 +74,6 @@
   (lift-expression
    req (expr/update-ops->statement v) :update-expression))
 
-
 (defn ->projection [[tag & [arg]]]
   (cond-> {:projection-type tag}
     arg (assoc :non-key-attributes arg)))
@@ -107,12 +107,12 @@
 (defmethod transform-request-kv :key [k v m target]
   (assoc m k (->item v)))
 
-(def ->keys
-  (partial
-   map
+(defn ->keys [v]
+  (map
    (fn [t attr]
      {:attribute-name (name attr)
-      :key-type t}) [:hash :range]))
+      :key-type t})
+   [:hash :range] v))
 
 (defmethod transform-request-kv :keys [k v m target]
   (if (= target :get-item)
@@ -130,15 +130,17 @@
       (transform-request-kv k v acc target))
     nil (prepare-request target body))))
 
-(def ->throughput #(set/rename-keys
-                    %
-                    {:read :read-capacity-units
-                     :write :write-capacity-units}))
+(def ->throughput
+  #(set/rename-keys
+    %
+    {:read :read-capacity-units
+     :write :write-capacity-units}))
 
 (defmethod transform-request-kv :throughput [k v m target]
   (assoc m k (->throughput v)))
 
-(defn restructure-index [{:keys [name throughput keys] [tag & [arg]] :project :as m}]
+(defn restructure-index
+  [{:keys [name throughput keys] [tag & [arg]] :project :as m}]
   (cond-> {:index-name name}
     keys (assoc :key-schema (->keys keys))
     arg  (assoc-in [:projection :non-key-attributes] arg)
@@ -156,13 +158,12 @@
         (not-empty local)  (assoc :local-secondary-indexes
                                   (map restructure-index local))))
     :update-table
-    (let [tagged-mods
-          (apply concat
-                 (for [mod-key #{:create :delete :update}]
-                   (for [mod (v mod-key)]
-                     {mod-key (restructure-index mod)})))]
-      (assoc m :global-secondary-index-updates
-             tagged-mods))))
+    (assoc m :global-secondary-index-updates
+           (mapcat
+            (fn [[op indexes]]
+              (for [index indexes]
+                {op (restructure-index index)}))
+            v))))
 
 (defn ->batch-req [type m]
   (let [m (->item m)]

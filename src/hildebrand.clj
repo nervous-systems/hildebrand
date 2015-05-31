@@ -13,6 +13,17 @@
    [plumbing.core :refer :all]
    [plumbing.map]))
 
+(def aws-error->hildebrand
+  {:resource-not-found-exception :resource-not-found
+   :conditional-check-failed-exception :conditional-failed})
+
+(defn rename-error [{{:keys [type] :as error} :error :as r}]
+  (let [r (dissoc r :error)]
+    (if error
+      (assoc r :hildebrand/error
+             (update error :type aws-error->hildebrand error))
+      r)))
+
 (defn issue-request! [{:keys [target] :as req}]
   (go-catching
     (let [resp (-> req
@@ -20,7 +31,7 @@
                    (update :body (partial restructure-request target))
                    eulalie/issue-request!
                    <?
-                   (set/rename-keys {:error :hildebrand/error}))]
+                   rename-error)]
       (if (:hildebrand/error resp)
         resp
         (restructure-response target (:body resp))))))
@@ -95,7 +106,7 @@ delete." )
     (try
       (-> (describe-table! creds table) <? :status)
       (catch clojure.lang.ExceptionInfo e
-        (when-not (= :resource-not-found-exception (-> e ex-data :type))
+        (when-not (= :resource-not-found (-> e ex-data :type))
           (throw e))))))
 
 (def table-status!! (comp <?! table-status!))

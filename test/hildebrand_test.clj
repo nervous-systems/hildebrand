@@ -27,7 +27,7 @@
 
 (deftest put+conditional
   (with-items {create-table-default [item]}
-    (is (= :conditional-check-failed-exception
+    (is (= :conditional-failed
            (try
              (h/put-item!! creds table item {:when [:not-exists [:name]]})
              (catch ExceptionInfo e
@@ -75,7 +75,7 @@
 
 (deftest delete+expected-expr-neg
   (with-items {create-table-default [(assoc item :age 33)]}
-    (is (= :conditional-check-failed-exception
+    (is (= :conditional-failed
            (try
              (h/delete-item!!
               creds table item
@@ -98,13 +98,13 @@
 
 (deftest update-item+
   (update-test
-   {:hobbies #{"eating" "sleeping"}
+   {:hobbies #{:eating :sleeping}
     :bad     "good"}
    {:nick    [:set "Rodrigo"]
     :hobbies [:add #{"dreaming"}]
     :bad     [:remove]}
    {:nick    "Rodrigo"
-    :hobbies #{"eating" "sleeping" "dreaming"}}))
+    :hobbies #{:eating :sleeping :dreaming}}))
 
 (deftest update-item+list
   (update-test
