@@ -5,14 +5,23 @@
             [plumbing.core :refer :all]
             [plumbing.map :refer [keyword-map]]))
 
+(defn ->hildebrand-literal [x]
+  (with-meta x (assoc (meta x) :hildebrand/literal true)))
+
+(defn hildebrand-literal? [x]
+  (:hildebrand/literal (meta x)))
+
 (defn ->hildebrand-path [x]
-  (if (coll? x)
-    (with-meta x (assoc (meta x) :hildebrand/path true))
-    x))
+  (cond (hildebrand-literal? x) x
+        (coll? x) (with-meta x
+                    (assoc (meta x) :hildebrand/path true))
+        :else x))
 
 (def path-reader
   "Abstraction!"
   ->hildebrand-path)
+
+(def literal-reader ->hildebrand-literal)
 
 (defn hildebrand-path?  [x]
   (and (coll? x) (:hildebrand/path (meta x))))

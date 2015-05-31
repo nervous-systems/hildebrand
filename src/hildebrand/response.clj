@@ -15,7 +15,11 @@
       :BOOL (boolean value)
       :NULL nil
       :SS   (into #{} (map keyword value))
-      :NS   (into #{} (map string->number value)))))
+      :NS   (into #{} (map string->number value))
+      ;; XXX
+      :BS   value
+      ;; XXX
+      :B    value)))
 
 (defn ->attr-def [{:keys [attribute-name attribute-type]}]
   [attribute-name (type-aliases-in attribute-type attribute-type)])

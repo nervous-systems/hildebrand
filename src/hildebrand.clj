@@ -21,7 +21,7 @@
   (let [r (dissoc r :error)]
     (if error
       (assoc r :hildebrand/error
-             (update error :type aws-error->hildebrand error))
+             (update error :type aws-error->hildebrand type))
       r)))
 
 (defn issue-request! [{:keys [target] :as req}]

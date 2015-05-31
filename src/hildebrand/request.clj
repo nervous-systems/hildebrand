@@ -24,6 +24,9 @@
       (map?     v)     {:M (for-map [[k v'] v]
                              (name k) (to-attr-value v'))}
       (set?     v) (to-set-attr v)
+      ;; This is basically a hack for binary support - you could supply
+      ;; e.g. #hildebrand/literal {:BS ...}
+      (expr/hildebrand-literal? v) v
       :else (throw (Exception. (str "Invalid value " (type v)))))))
 
 (defn ->item [m]
