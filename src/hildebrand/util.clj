@@ -3,27 +3,6 @@
             [plumbing.core :refer :all])
   (:import (clojure.lang BigInt)))
 
-;; Experiments, mostly
-
-(defn stroll [inner outer state form]
-  (if-not (coll? form)
-    (outer state form)
-    (let [[state form']
-          (reduce
-           (fn [[s f] x]
-             (let [[s f'] (inner s x)]
-               [s (conj f f')]))
-           [state []]
-           form)
-          form (cond
-                 (instance? clojure.lang.IMapEntry form) (vec form')
-                 (seq? form) (doall form')
-                 :else (into (empty form) form'))]
-      (outer state form))))
-
-(defn post-stroll [f state form]
-  (stroll (partial post-stroll f) f state form))
-
 (defn transform-map [spec m]
   (into {}
     (for [[k v] m]
