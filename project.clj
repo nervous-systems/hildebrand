@@ -13,7 +13,7 @@
   :dependencies
   [[org.clojure/clojure    "1.6.0"]
    [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-   [io.nervous/eulalie     "0.1.1"]
+   [io.nervous/eulalie     "0.2.0"]
    [io.nervous/glossop     "0.1.0"]
    [prismatic/plumbing     "0.4.1"]]
   :exclusions [[org.clojure/clojure]])
