@@ -19,7 +19,6 @@
   (doseq [[v handler] v->handler]
     (defmethod method v [& args] (apply handler args))))
 
-
 ;; Taken from Faraday
 (defn- assert-precision [x]
   (let [^BigDecimal dec (if (string? x) (BigDecimal. ^String x) (bigdec x))]

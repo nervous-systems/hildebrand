@@ -46,8 +46,6 @@
     (cond-> n
       (= "#" (subs n 0 1)) (subs 1))))
 
-(def path->col (fn-> name (str/split #"\." 2) first))
-
 (defn flatten-update-ops [m & [{:keys [path] :or {path []}}]]
   (reduce
    (fn [acc [k v]]

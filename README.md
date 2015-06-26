@@ -6,6 +6,7 @@ Undocumented, high-level, pure Clojure asynchronous AWS client, built on top of 
 
 Hildebrand has successfully been used in production, and is extremely [well tested](https://github.com/nervous-systems/hildebrand/blob/master/test/hildebrand_test.clj).
 
+[This blog post]( https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/08/hildebrand/) has a bunch of usage examples in it.
 
 [Contributions welcomed!](https://github.com/nervous-systems/hildebrand/issues)
 
