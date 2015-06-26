@@ -245,12 +245,6 @@
        (coll? x) (vec x)
        :else     x))))
 
-(deftest describe-complex-table
-  (with-tables [create-table-indexed]
-    (is (= create-table-indexed
-           (-> (h/describe-table!! creds indexed-table)
-               cleanup-description)))))
-
 (deftest scan+
   (let [items (for [i (range 5)]
                 {:name     (str "scan-test-" i)

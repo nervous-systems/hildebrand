@@ -1,66 +1,17 @@
 (ns hildebrand
   (:require
-   [clojure.set :as set]
-   [clojure.string :as str]
-   [clojure.walk :as walk]
+   [hildebrand.internal.request :as request]
+   [hildebrand.internal.response :as response]
+   [hildebrand.internal :as i]
    [clojure.core.async :as async]
-   [eulalie]
-   [eulalie.dynamo]
-   [glossop :refer :all :exclude [fn-> fn->>]]
-   [hildebrand.util :refer :all]
-   [hildebrand.request :refer [restructure-request]]
-   [hildebrand.response :refer [restructure-response]]
-   [plumbing.core :refer :all]
-   [plumbing.map]))
-
-(def aws-error->hildebrand
-  {:resource-not-found-exception :resource-not-found
-   :conditional-check-failed-exception :conditional-failed})
-
-(defn rename-error [{{:keys [type] :as error} :error :as r}]
-  (let [r (dissoc r :error)]
-    (if error
-      (assoc r :hildebrand/error
-             (update error :type aws-error->hildebrand type))
-      r)))
-
-(defn issue-request! [{:keys [target] :as req}]
-  (go-catching
-    (let [resp (-> req
-                   (assoc :service :dynamo)
-                   (update :body (partial restructure-request target))
-                   eulalie/issue-request!
-                   <?
-                   rename-error)]
-      (if (:hildebrand/error resp)
-        resp
-        (restructure-response target (:body resp))))))
-
-(def issue-request!! (comp <?! issue-request!))
-
-(defmulti  error->throwable :type)
-(defmethod error->throwable :default [{:keys [type message] :as error}]
-  (ex-info (name type) error))
-
-(defn issue-targeted-request! [target creds request]
-  (go-catching
-    (let [resp (<? (issue-request! {:target target :creds creds :body request}))]
-      (if-let [error (when (map? resp) (:hildebrand/error resp))]
-        (error->throwable error)
-        resp))))
+   [glossop :refer [<?! go-catching <?]]))
 
 (defmacro defissuer [target-name args & [doc]]
-  (let [fname!  (-> target-name name (str "!") symbol)
-        fname!! (-> target-name name (str "!!") symbol)
-        args'   (into '[creds] (conj args '& '[extra]))
-        body  `(issue-targeted-request!
-                ~(keyword target-name) ~'creds
-                (merge (plumbing.map/keyword-map ~@args) ~'extra))
-        md     (cond-> (meta target-name)
-                 doc (assoc :doc doc))]
-    `(do
-       (defn ~(with-meta fname!  md) ~args' ~body)
-       (defn ~(with-meta fname!! md) ~args' (<?! ~body)))))
+  `(i/defissuer :dynamo
+     ~target-name ~args
+     request/restructure-request
+     response/restructure-response
+     ~doc))
 
 (defissuer get-item [table key]
   "`key` is a map containing enough keys (either hash, or hash+range) to

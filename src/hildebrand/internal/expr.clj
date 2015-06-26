@@ -1,4 +1,4 @@
-(ns hildebrand.expr
+(ns hildebrand.internal.expr
   (:require [clojure.string :as str]
             [clojure.walk :as walk]
             [hildebrand.util :refer :all]

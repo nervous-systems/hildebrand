@@ -1,7 +1,7 @@
-(ns hildebrand.request
+(ns hildebrand.internal.request
   (:require [glossop :refer [stringy?]]
             [clojure.set :as set]
-            [hildebrand.expr :as expr]
+            [hildebrand.internal.expr :as expr]
             [hildebrand.util :refer
              [boolean? ddb-num? throw-empty type-aliases-out]]
             [plumbing.core :refer :all]))
