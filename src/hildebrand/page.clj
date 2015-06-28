@@ -2,18 +2,8 @@
   (:require [clojure.core.async :as async]
             [clojure.tools.logging :as log]
             [hildebrand :as h]
+            [hildebrand.util :as util]
             [glossop :refer :all]))
-
-(defn onto-chan?
-  "This is a version of onto-chan which never closes the target
-  channel, and returns a boolean on its own channel, indicating
-  whether all puts were completed"
-  ([ch coll]
-   (async/go-loop [vs (seq coll)]
-     (if vs
-       (when (async/>! ch (first vs))
-         (recur (next vs)))
-       true))))
 
 (defn paginate! [f input {:keys [limit maximum chan]}]
   (assert (or limit chan)
@@ -26,7 +16,7 @@
                                      (assoc :start-key start-key))))
                 n (+ n (count items))
                 {:keys [end-key]} (meta items)]
-            (if (and (<? (onto-chan? chan items))
+            (if (and (<? (util/onto-chan? chan items))
                      end-key
                      (or (not maximum) (< n maximum)))
               (recur end-key n)
