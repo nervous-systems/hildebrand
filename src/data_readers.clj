@@ -1,2 +1,2 @@
-{hildebrand/path    hildebrand.expr/path-reader
- hildebrand/literal hildebrand.expr/literal-reader}
+{hildebrand/path    hildebrand.internal.expr/path-reader
+ hildebrand/literal hildebrand.internal.expr/literal-reader}

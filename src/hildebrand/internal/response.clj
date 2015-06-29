@@ -1,9 +1,8 @@
-(ns hildebrand.response
+(ns hildebrand.internal.response
   (:require [clojure.set :as set]
             [clojure.walk :as walk]
             [hildebrand.util :refer :all]
-            [plumbing.core :refer :all]
-            [clojure.tools.logging :as log]))
+            [plumbing.core :refer :all]))
 
 (defn from-attr-value [m]
   (let [[[tag value]] (seq m)]
@@ -170,8 +169,6 @@
    :unprocessed-items :unprocessed})
 
 (def structure-groups
-  ;; we want the same semantics for all item-returning functions, so we'll
-  ;; filter target through this before restructure-response* dispatch
   {:put-item    :get-item
    :update-item :get-item
    :delete-item :get-item})
