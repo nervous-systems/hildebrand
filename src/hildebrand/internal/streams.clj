@@ -34,7 +34,7 @@
                 [stream-view-type])]
     (into [event-name]
       (for [k ks]
-        (response/->item (m k))))))
+        (response/->item (some m [k :keys]))))))
 
 (defn ->record [{:keys [dynamodb event-name] :as m}]
   (with-meta
