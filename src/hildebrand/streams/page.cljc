@@ -1,8 +1,12 @@
 (ns hildebrand.streams.page
-  (:require [clojure.core.async :as async]
-            [hildebrand.streams :as streams]
-            [hildebrand.util :as util]
-            [glossop :refer [<? go-catching]]))
+  (:require [hildebrand.streams :as streams]
+            [glossop.util :refer [onto-chan?]]
+            #?@ (:clj
+                 [[glossop.core :refer [go-catching <?]]
+                  [clojure.core.async :as async]]
+                 :cljs
+                 [[cljs.core.async :as async]]))
+  #? (:cljs (:require-macros [glossop.macros :refer [go-catching <?]])))
 
 (defn get-records! [creds stream-id shard-id iterator-type
                     & [{:keys [limit chan sequence-number]}]]
@@ -18,7 +22,7 @@
           (loop [iterator iterator]
             (let [records  (<? (streams/get-records! creds iterator {:limit limit}))
                   iterator (-> records meta :next-shard-iterator)]
-              (if (and (<? (util/onto-chan? chan records)) iterator)
+              (if (and (<? (onto-chan? chan records)) iterator)
                 (recur iterator)
                 (async/close! chan))))
           (catch Exception e

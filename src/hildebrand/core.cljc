@@ -1,4 +1,4 @@
-(ns hildebrand
+(ns hildebrand.core
   (:require
    [eulalie.support]
    [hildebrand.internal.request]

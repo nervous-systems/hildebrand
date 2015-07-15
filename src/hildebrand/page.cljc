@@ -1,9 +1,12 @@
 (ns hildebrand.page
-  (:require [clojure.core.async :as async]
-            [clojure.tools.logging :as log]
-            [hildebrand :as h]
-            [hildebrand.util :as util]
-            [glossop :refer :all]))
+  (:require [hildebrand.core :as h]
+            [glossop.util :refer [onto-chan?]]
+            #?@ (:clj
+                 [[glossop.core :refer [go-catching <?]]
+                  [clojure.core.async :as async]]
+                 :cljs
+                 [[cljs.core.async :as async]]))
+  #? (:cljs (:require-macros [glossop.macros :refer [go-catching <?]])))
 
 (defn paginate! [f input {:keys [limit maximum chan]}]
   (assert (or limit chan)
@@ -16,12 +19,12 @@
                                      (assoc :start-key start-key))))
                 n (+ n (count items))
                 {:keys [end-key]} (meta items)]
-            (if (and (<? (util/onto-chan? chan items))
+            (if (and (<? (onto-chan? chan items))
                      end-key
                      (or (not maximum) (< n maximum)))
               (recur end-key n)
               (async/close! chan))))
-        (catch Exception e
+        (catch #? (:clj Exception :cljs js/Error) e
           (async/>! chan e)
           (async/close! chan))))
     chan))
