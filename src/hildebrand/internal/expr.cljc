@@ -1,9 +1,10 @@
 (ns hildebrand.internal.expr
   (:require [clojure.string :as str]
             [clojure.walk :as walk]
-            [hildebrand.util :refer :all]
-            [plumbing.core :refer :all]
-            [plumbing.map :refer [keyword-map]]))
+            [glossop.misc :refer [stringy?]]
+            [hildebrand.internal.util :as util]
+            [plumbing.core :refer [dissoc-in #?@ (:clj [memoized-fn fn->> for-map])]])
+  #? (:cljs (:require-macros [plumbing.core :refer [memoized-fn fn->> for-map]])))
 
 (defn ->hildebrand-literal [x]
   (with-meta x (assoc (meta x) :hildebrand/literal true)))
@@ -27,7 +28,7 @@
   (and (coll? x) (:hildebrand/path (meta x))))
 
 (defn aliased-col? [x]
-  (and (str-or-keyword? x)
+  (and (stringy? x)
        (-> x name (subs 0 1) (= "#"))))
 
 (defn alias-col [x segment->alias]
@@ -37,7 +38,7 @@
 
 (defn alias-col+path [segments segment->alias]
   (map #(cond-> %
-          (str-or-keyword? %)
+          (stringy? %)
           (alias-col segment->alias))
        segments))
 
@@ -66,7 +67,7 @@
 
 (defn path->attrs [segments segment->alias]
   (into {}
-    (for [segment segments :when (str-or-keyword? segment)]
+    (for [segment segments :when (stringy? segment)]
       [(segment->alias (name segment)) (name segment)])))
 
 (defn parameterize-op [{:keys [op-name col+path arg] :as op} segment->alias]
@@ -86,15 +87,15 @@
           :values {g arg}}]))))
 
 (defn explode-op [[op-name col+path arg :as op]]
-  (keyword-map op-name col+path arg))
+  {:op-name op-name :col+path col+path :arg arg})
 
 (defmulti  arg->call (fn [fn-name col arg] fn-name))
 (defmethod arg->call :default [fn-name col arg]
-  (format "%s(%s, %s)" (name fn-name) col arg))
+  (str (name fn-name) "(" col "," arg ")" (name fn-name) col arg))
 (defmethod arg->call :+ [_ col arg]
-  (format "%s + %s" col arg))
+  (str col " + " arg))
 (defmethod arg->call :- [_ col arg]
-  (format "%s - %s" col arg))
+  (str col " - " arg))
 
 (defn new-op-name [op op-name]
   (assoc op :op-name op-name))
@@ -108,7 +109,7 @@
 
 (defmulti  rewrite-op (fn [{:keys [op-name]} params] op-name))
 (defmethod rewrite-op :default [op params] [op params])
-(defmulti-dispatch
+(util/defmulti-dispatch
   rewrite-op
   {:append (partial op->set :list_append)
    :init   (partial op->set :if_not_exists)
@@ -237,7 +238,7 @@
   (group x (name op) (group (arglist xs))))
 (defmethod cond-expr-op->string :not [[op arg]]
   (group 'not arg))
-(defmulti-dispatch cond-expr-op->string
+(util/defmulti-dispatch cond-expr-op->string
   (for-map [[in-op out-op] prefix-ops]
     in-op (fn [[_ & args]]
             (str (name out-op) (group (arglist args))))))

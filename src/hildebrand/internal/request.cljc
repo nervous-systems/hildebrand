@@ -1,17 +1,19 @@
 (ns hildebrand.internal.request
-  (:require [glossop :refer [stringy?]]
+  (:require [glossop.misc :refer [stringy?]]
             [clojure.set :as set]
             [hildebrand.internal.expr :as expr]
-            [hildebrand.util :refer
-             [boolean? ddb-num? throw-empty type-aliases-out]]
-            [plumbing.core :refer :all]))
+            [hildebrand.internal.platform.number :refer [boolean? ddb-num?]]
+            [hildebrand.internal.util :refer [type-aliases-out throw-empty]]
+            [plumbing.core :refer [map-vals #?@ (:clj [for-map])]])
+  #? (:cljs
+      (:require-macros [plumbing.core :refer [for-map map-vals]])))
 
 (defn to-set-attr [v]
   (let [v (throw-empty v)]
     (cond
       (every? stringy? v)  {:SS (map name v)}
       (every? ddb-num? v)  {:NS (map str     v)}
-      :else (throw (Exception. "Invalid set type")))))
+      :else (assert false "Invalid set type"))))
 
 (defn to-attr-value [v]
   (let [v (cond-> v (keyword? v) name)]
@@ -27,7 +29,7 @@
       ;; This is basically a hack for binary support - you could supply
       ;; e.g. #hildebrand/literal {:BS ...}
       (expr/hildebrand-literal? v) v
-      :else (throw (Exception. (str "Invalid value " (type v)))))))
+      :else (assert false (str "Invalid value " (type v))))))
 
 (defn ->item [m]
   (for-map [[k v] m]

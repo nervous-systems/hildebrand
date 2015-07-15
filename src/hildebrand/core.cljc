@@ -1,17 +1,18 @@
 (ns hildebrand
   (:require
-   [hildebrand.internal.request :as request]
-   [hildebrand.internal.response :as response]
-   [hildebrand.internal :as i]
-   [clojure.core.async :as async]
-   [glossop :refer [<?! go-catching <?]]))
-
-(defmacro defissuer [target-name args & [doc]]
-  `(i/defissuer :dynamo
-     ~target-name ~args
-     request/restructure-request
-     response/restructure-response
-     ~doc))
+   [eulalie.support]
+   [hildebrand.internal.request]
+   [hildebrand.internal.response]
+   #?@ (:clj
+        [[hildebrand.internal :refer [defissuer]]
+         [glossop.core :refer [<? <?! go-catching]]
+         [clojure.core.async :as async]]
+        :cljs
+        [[cljs.core.async :as async]
+         [plumbing.map]]))
+  #? (:cljs
+      (:require-macros [hildebrand.internal :refer [defissuer]]
+                       [glossop.macros :refer [<? go-catching]])))
 
 (defissuer get-item [table key]
   "`key` is a map containing enough keys (either hash, or hash+range) to
@@ -56,11 +57,12 @@ delete." )
   (go-catching
     (try
       (-> (describe-table! creds table) <? :status)
-      (catch clojure.lang.ExceptionInfo e
-        (when-not (= :resource-not-found (-> e ex-data :type))
-          (throw e))))))
+      (catch
+          #? (:clj clojure.lang.ExceptionInfo :cljs js/Error) e
+          (when-not (= :resource-not-found (-> e ex-data :type))
+            (throw e))))))
 
-(def table-status!! (comp <?! table-status!))
+#? (:clj (def table-status!! (comp <?! table-status!)))
 
 (defn await-status! [creds table status]
   (go-catching
@@ -72,7 +74,7 @@ delete." )
                       (<? (async/timeout 1000))
                       (recur)))))))
 
-(def await-status!! (comp <?! await-status!))
+#? (:clj (def await-status!! (comp <?! await-status!)))
 
 (defn ensure-table! [creds {:keys [table] :as create}]
   (go-catching
@@ -82,4 +84,4 @@ delete." )
       (when-not (= :active status)
         (<? (await-status! creds table :active))))))
 
-(def ensure-table!! (comp <?! ensure-table!))
+#? (:clj (def ensure-table!! (comp <?! ensure-table!)))

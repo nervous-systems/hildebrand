@@ -1,5 +1,6 @@
 (ns hildebrand.internal.streams
-  (:require [hildebrand.util :as util]
+  (:require [hildebrand.internal.util :as util]
+            [hildebrand.internal.platform.number :refer [string->number]]
             [eulalie.dynamo-streams]
             [plumbing.core :refer [update]]
             [hildebrand.internal.response :as response]))
@@ -8,8 +9,8 @@
   (update m :sequence-number-range
           (fn [{start :starting-sequence-number
                 end   :ending-sequence-number}]
-            [(some-> start util/string->number)
-             (some-> end   util/string->number)])))
+            [(some-> start string->number)
+             (some-> end   string->number)])))
 
 (defmethod response/restructure-response* :describe-stream
   [_ {{:keys [key-schema shards] :as m} :stream-description}]
@@ -39,7 +40,7 @@
 (defn ->record [{:keys [dynamodb event-name] :as m}]
   (with-meta
     (->tagged-record event-name dynamodb)
-    (update-in m [:dynamodb :sequence-number] util/string->number)))
+    (update-in m [:dynamodb :sequence-number] string->number)))
 
 (defmethod response/restructure-response* :get-records
   [_ {:keys [records] :as m}]

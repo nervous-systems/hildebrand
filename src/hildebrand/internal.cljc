@@ -1,5 +1,8 @@
 (ns hildebrand.internal
-  (:require [plumbing.core :refer [update]]
+  (:require [eulalie.support]
+            [hildebrand.internal.request]
+            [hildebrand.internal.response]
+            [plumbing.core :refer [update]]
             [plumbing.map :refer [keyword-map]]
             [hildebrand.error :refer [error->throwable]]
             [glossop :refer [<?! go-catching <?]]
@@ -27,16 +30,10 @@
         (error->throwable error)
         (resp-fn target body)))))
 
-(defmacro defissuer [service target-name args req-fn resp-fn & [doc]]
-  (let [fname!  (-> target-name name (str "!") symbol)
-        fname!! (-> target-name name (str "!!") symbol)
-        args'   (into '[creds] (conj args '& '[extra]))
-        body  `(issue-request!
-                ~service ~(keyword target-name) ~'creds
-                (merge (plumbing.map/keyword-map ~@args) ~'extra)
-                ~req-fn ~resp-fn)
-        md     (cond-> (meta target-name)
-                 doc (assoc :doc doc))]
-    `(do
-       (defn ~(with-meta fname!  md) ~args' ~body)
-       (defn ~(with-meta fname!! md) ~args' (<?! ~body)))))
+#? (:clj
+    (defmacro defissuer [target-name args & [doc]]
+      `(eulalie.support/defissuer :dynamo
+         ~target-name ~args
+         hildebrand.internal.request/restructure-request
+         hildebrand.internal.response/restructure-response
+         ~doc)))

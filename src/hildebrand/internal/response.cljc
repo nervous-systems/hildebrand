@@ -1,8 +1,10 @@
 (ns hildebrand.internal.response
   (:require [clojure.set :as set]
             [clojure.walk :as walk]
-            [hildebrand.util :refer :all]
-            [plumbing.core :refer :all]))
+            [hildebrand.internal.util :refer [type-aliases-in]]
+            [hildebrand.internal.platform.number :refer [string->number]]
+            [plumbing.core :refer [map-vals #?@ (:clj [fn-> fn->> for-map])]])
+  #? (:cljs (:require-macros [plumbing.core :refer [fn-> fn->> for-map]])))
 
 (defn from-attr-value [m]
   (let [[[tag value]] (seq m)]
@@ -145,7 +147,7 @@
 (defn maybe-unprocessed-error [unprocessed]
   (when (not-empty unprocessed)
     (error :unprocessed-items
-           (format "%d unprocessed items" (count unprocessed))
+           (str (count unprocessed) "unprocessed items")
            {:unprocessed unprocessed})))
 
 (defmethod restructure-response* :batch-get-item [_ {:keys [unprocessed responses] :as m}]
