@@ -1,6 +1,7 @@
 (ns hildebrand.core
   (:require
    [eulalie.support]
+   [hildebrand.internal]
    [hildebrand.internal.request]
    [hildebrand.internal.response]
    #?@ (:clj
@@ -9,10 +10,17 @@
          [clojure.core.async :as async]]
         :cljs
         [[cljs.core.async :as async]
-         [plumbing.map]]))
+         [plumbing.map]
+         [cljs.reader :as reader]
+         [hildebrand.internal.expr :as expr]]))
   #? (:cljs
       (:require-macros [hildebrand.internal :refer [defissuer]]
                        [glossop.macros :refer [<? go-catching]])))
+
+#? (:cljs
+    (do
+      (reader/register-tag-parser! "hildebrand/path"    expr/path-reader)
+      (reader/register-tag-parser! "hildebrand/literal" expr/literal-reader)))
 
 (defissuer get-item [table key]
   "`key` is a map containing enough keys (either hash, or hash+range) to

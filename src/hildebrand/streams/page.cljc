@@ -25,7 +25,7 @@
               (if (and (<? (onto-chan? chan records)) iterator)
                 (recur iterator)
                 (async/close! chan))))
-          (catch Exception e
+          (catch #? (:clj Exception :cljs js/Error) e
             (async/>! chan e)
             (async/close! chan)))))
     chan))

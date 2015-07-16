@@ -1,6 +1,10 @@
-(ns hildebrand.internal.response-test
-  (:require [clojure.test :refer :all]
-            [hildebrand.internal.response :refer :all]))
+(ns hildebrand.test.internal.response
+  (:require #? (:clj
+                [clojure.test :refer [deftest is]]
+                :cljs
+                [cemerick.cljs.test])
+            [hildebrand.internal.response :refer [restructure-response]])
+  #? (:cljs (:require-macros [cemerick.cljs.test :refer [deftest is]])))
 
 (def table-description-out
   {:table-description

@@ -17,7 +17,7 @@
   (or (number? x)
       (and (instance? BigNumber x) (assert-precision x))))
 
-(defn string->number [^String s]
+(defn string->number [s]
   (let [v (BigNumber. s)]
     (if (and (= -1 (.indexOf s ".")) (<= (.precision v) 15))
       (js/parseInt s)

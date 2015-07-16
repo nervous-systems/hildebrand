@@ -5,7 +5,8 @@
   :scm {:name "git" :url "https://github.com/nervous-systems/hildebrand"}
   :deploy-repositories [["clojars" {:creds :gpg}]]
   :signing {:gpg-key "moe@nervous.io"}
-  :global-vars {*warn-on-reflection* true}
+  :global-vars {*warn-on-reflection* true
+                *print-meta* true}
   :source-paths ["src"]
   :plugins [[codox "0.8.11"]
             [lein-cljsbuild "1.0.6"]

@@ -1,6 +1,10 @@
-(ns hildebrand.internal.request-test
-  (:require [clojure.test :refer :all]
-            [hildebrand.internal.request :refer :all]))
+(ns hildebrand.test.internal.request
+  (:require #? (:clj
+                [clojure.test :refer [deftest is]]
+                :cljs
+                [cemerick.cljs.test])
+            [hildebrand.internal.request :refer [restructure-request]])
+  #? (:cljs (:require-macros [cemerick.cljs.test :refer [deftest is]])))
 
 (def gs-index-out
   {:index-name :users-by-id
@@ -16,12 +20,12 @@
    :project [:include [:x :y]]
    :throughput {:read 1 :write 5}})
 
-(deftest create-table+
+(deftest create-table
   (is (= {:table-name :users
           :attribute-definitions
-          [{:attribute-name "email" :attribute-type :S}
-           {:attribute-name "id" :attribute-type :S}
-           {:attribute-name "timestamp" :attribute-type :N}]
+          #{{:attribute-name "email" :attribute-type :S}
+            {:attribute-name "id" :attribute-type :S}
+            {:attribute-name "timestamp" :attribute-type :N}}
           :key-schema [{:attribute-name "email" :key-type :hash}]
           :global-secondary-indexes
           [gs-index-out]
@@ -33,19 +37,20 @@
             :projection {:projection-type :keys-only}}]
           :provisioned-throughput {:read-capacity-units 5
                                    :write-capacity-units 1}}
-         (restructure-request
-          :create-table
-          {:table :users
-           :attrs {:id :string :email :S :timestamp :number}
-           :keys [:email]
-           :indexes
-           {:global [gs-index-in]
-            :local [{:name :users-by-timestamp
-                     :keys [:email :timestamp]
-                     :project [:keys-only]}]}
-           :throughput {:read 5 :write 1}}))))
+         (-> (restructure-request
+              :create-table
+              {:table :users
+               :attrs {:id :string :email :S :timestamp :number}
+               :keys [:email]
+               :indexes
+               {:global [gs-index-in]
+                :local [{:name :users-by-timestamp
+                         :keys [:email :timestamp]
+                         :project [:keys-only]}]}
+               :throughput {:read 5 :write 1}})
+             (update :attribute-definitions set)))))
 
-(deftest batch-write-item+
+(deftest batch-write-item
   (is (= {:return-consumed-capacity true
           :request-items
           {:table-one [{:delete-request {:key  {"user" {:N "1"}}}}]
@@ -56,7 +61,7 @@
            :delete {:table-one [{:user 1}]}
            :put    {:table-two [{:user 2}]}}))))
 
-(deftest batch-get-item+
+(deftest batch-get-item
   (is (= {:request-items
           {:table-one {:consistent-read true
                         :expression-attribute-names {:#a "a"}
@@ -73,7 +78,7 @@
 ;; Don't test any expression-related stuff, since we're not in a
 ;; position to verify it without getting awkwardly specific.
 
-(deftest query+
+(deftest query
   (is (= {:table-name :users
           :key-conditions
           {:user-id
@@ -91,7 +96,7 @@
            :consistent true
            :sort :asc}))))
 
-(deftest delete-item+
+(deftest delete-item
   (is (= {:table-name :users
           :key {"x" {:S "y"}}
           :return-values :all-old}
@@ -99,7 +104,7 @@
           :delete-item
           {:table :users :key {:x "y"} :return :all-old}))))
 
-(deftest update-item+
+(deftest update-item
   (is (= {:table-name :users
           :return-values :all-new
           :key {"user-id" {:S "Moe"}}
@@ -111,7 +116,7 @@
            :return :all-new
            :metrics true}))))
 
-(deftest get-item+
+(deftest get-item
   (is (= {:table-name :users
           :key {"foo" {:S "bar"}}
           :consistent-read true}
@@ -121,7 +126,7 @@
            :key {:foo "bar"}
            :consistent true}))))
 
-(deftest update-table+
+(deftest update-table
   (is (= {:table-name :users
           :attribute-definitions [{:attribute-name "x"
                                    :attribute-type :S}]
@@ -145,7 +150,7 @@
                :throughput {:read 5 :write 3}})
              (update-in [:global-secondary-index-updates] (partial into #{}))))))
 
-(deftest describe-table+
+(deftest describe-table
   (is (= {:table-name :users}
          (restructure-request
           :describe-table

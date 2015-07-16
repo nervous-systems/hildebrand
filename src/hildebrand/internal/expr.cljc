@@ -3,7 +3,8 @@
             [clojure.walk :as walk]
             [glossop.misc :refer [stringy?]]
             [hildebrand.internal.util :as util]
-            [plumbing.core :refer [dissoc-in #?@ (:clj [memoized-fn fn->> for-map])]])
+            [plumbing.core :refer
+             [dissoc-in #?@ (:clj [memoized-fn fn->> for-map])]])
   #? (:cljs (:require-macros [plumbing.core :refer [memoized-fn fn->> for-map]])))
 
 (defn ->hildebrand-literal [x]
@@ -91,7 +92,7 @@
 
 (defmulti  arg->call (fn [fn-name col arg] fn-name))
 (defmethod arg->call :default [fn-name col arg]
-  (str (name fn-name) "(" col "," arg ")" (name fn-name) col arg))
+  (str (name fn-name) "(" col "," arg ")"))
 (defmethod arg->call :+ [_ col arg]
   (str col " + " arg))
 (defmethod arg->call :- [_ col arg]

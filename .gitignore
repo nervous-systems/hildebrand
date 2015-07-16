@@ -11,3 +11,5 @@ pom.xml.asc
 .lein-failures
 vars
 .nrepl-port
+/out
+/node_modules

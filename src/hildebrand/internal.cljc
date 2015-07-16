@@ -12,10 +12,10 @@
   (aws-error->hildebrand error-type error-type))
 
 (defn restructure-response [target body]
-  (let [{:keys [hildebrand/error] :as resp}
-        (hildebrand.internal.response/restructure-response target body)]
-    (if-let [{:keys [type]} error]
-      (ex-info (name type) error)
+  (let [resp (hildebrand.internal.response/restructure-response target body)]
+    (if (and (map? resp) (:hildebrand/error resp))
+      (let [{{:keys [type] :as error} :hildebrand/error} resp]
+        (ex-info (name type) error))
       resp)))
 
 #? (:clj
