@@ -107,9 +107,6 @@
                 (catch #? (:clj ExceptionInfo :cljs js/Error) e
                        (-> e ex-data :type))))))))
 
-
-
-
 ;; long story
 #? (:clj
     (defmacro update-test [attrs-in updates attrs-out & [ctx]]
