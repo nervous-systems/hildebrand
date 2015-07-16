@@ -2,9 +2,9 @@
 
 [![Clojars Project](http://clojars.org/io.nervous/hildebrand/latest-version.svg)](http://clojars.org/io.nervous/hildebrand)
 
-Undocumented, high-level, pure Clojure asynchronous AWS client, built on top of [eulalie](https://github.com/nervous-systems/eulalie).
+High-level, asynchronous Dynamo client, built on top of [eulalie](https://github.com/nervous-systems/eulalie).
 
-Hildebrand has successfully been used in production, and is extremely [well tested](https://github.com/nervous-systems/hildebrand/blob/master/test/hildebrand_test.clj).
+Hildebrand has successfully been used in production, and is extremely well tested.
 
 [This blog post]( https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/08/hildebrand/) has a bunch of usage examples in it.
 
