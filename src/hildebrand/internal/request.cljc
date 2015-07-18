@@ -54,13 +54,13 @@
    :attribute-type (type-aliases-out v v)})
 
 (defn lift-projection-expression [m v]
-  (cond-> m
-    (not-empty v)
-    (assoc :expression-attribute-names
-           (into {}
-             (for [col v :when (expr/aliased-col? col)]
-               [col (expr/unalias-col col)]))
-           :projection-expression v)))
+  (let [names (into {}
+                (for [col v :when (expr/aliased-col? col)]
+                  [col (expr/unalias-col col)]))]
+
+    (cond-> m
+      (not-empty names) (assoc :expression-attribute-names names)
+      (not-empty v)     (assoc :projection-expression v))))
 
 (defn lift-expression [req v out-key]
   (if-let [{:keys [expr values attrs]} (map-vals not-empty v)]

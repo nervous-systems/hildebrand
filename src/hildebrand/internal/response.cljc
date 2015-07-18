@@ -127,10 +127,10 @@
   ;; If anything except the item appears in the response (e.g. capacity, etc.)
   ;; then default to the empty map so we can associate metadata with it.
   ;; It's not ideal, but I'm not sure what is.
-  (let [m    (not-empty (dissoc m :item))
-        item (cond-> (not-empty item) m (or {}))]
-    (when item
-      (with-meta item m))))
+  (let [m (not-empty (dissoc m :item))]
+    (if (and m item)
+      (with-meta item m)
+      item)))
 
 (defmethod restructure-response* :list-tables [_ {:keys [tables end-table]}]
   (with-meta tables {:end-table end-table}))
