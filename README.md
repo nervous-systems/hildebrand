@@ -10,7 +10,17 @@ with both Clojure and Clojurescript/Node.
 Advanced Dynamo features, including the [DynamoDB Streams
 API](http://aws.amazon.com/dynamodb/faqs/#triggers) are fully implemented.
 
-## Snippet
+## Documentation
+
+- The [API
+introduction](https://github.com/nervous-systems/hildebrand/wiki/API-Introduction)
+on the wiki is a good place to start.
+- [Introducing Hildebrand](
+https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/08/hildebrand/), a blog
+post, has a bunch of pre-1.0 usage examples in it - the namespace layout has
+changed slightly, but the ideas are the same.
+
+## Impractical Snippet
 
 ```clojure
 (require '[hildebrand.channeled :refer [query! batching-deletes]])
@@ -24,16 +34,6 @@ API](http://aws.amazon.com/dynamodb/faqs/#triggers) are fully implemented.
       {delete-chan :in-chan} (batching-deletes creds {:table :games})]
   (async/pipe results delete-chan))
 ```
-
-## Documentation
-
-- The [API
-introduction](https://github.com/nervous-systems/hildebrand/wiki/API-Introduction)
-on the wiki is a good place to start.
-- [Introducing Hildebrand](
-https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/08/hildebrand/), a blog
-post, has a bunch of pre-1.0 usage examples in it - the namespace layout has
-changed slightly, but the ideas are the same.
 
 ## Clojurescript
 
