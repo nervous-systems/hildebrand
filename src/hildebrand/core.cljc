@@ -67,19 +67,20 @@ delete." )
       (-> (describe-table! creds table) <? :status)
       (catch
           #? (:clj clojure.lang.ExceptionInfo :cljs js/Error) e
-          (when-not (= :resource-not-found (-> e ex-data :type))
+          (when (not= :resource-not-found (-> e ex-data :type))
             (throw e))))))
 
 #? (:clj (def table-status!! (comp <?! table-status!)))
 
-(defn await-status! [creds table status]
+;; Should probably do something smarter
+(defn await-status! [creds table target-status & [{:keys [timeout] :or {timeout 250}}]]
   (go-catching
     (loop []
-      (let [status' (<? (table-status! creds table))]
-        (cond (nil? status')     nil
-              (= status status') status'
+      (let [status (<? (table-status! creds table))]
+        (cond (nil? status)            nil
+              (= status target-status) status
               :else (do
-                      (<? (async/timeout 1000))
+                      (<? (async/timeout timeout))
                       (recur)))))))
 
 #? (:clj (def await-status!! (comp <?! await-status!)))

@@ -1,10 +1,11 @@
 (ns hildebrand.test.common
   (:require [hildebrand.core :as h]
             [plumbing.core :refer [map-keys]]
-            #? (:clj
-                [glossop.core :refer [<? <?! go-catching]]
-                :cljs
-                [cljs.core.async]))
+            #?@ (:clj
+                 [[glossop.core :refer [<? <?! go-catching]]
+                  [clojure.core.async :as async]]
+                 :cljs
+                 [[cljs.core.async :as async]]))
   #? (:cljs
       (:require-macros [glossop.macros :refer [go-catching <?]])))
 
@@ -18,18 +19,23 @@
   {:access-key (env "AWS_ACCESS_KEY")
    :secret-key (env "AWS_SECRET_KEY")})
 
-(defn with-items! [specs f]
-  (go-catching
-    (let [table-name->keys (map-keys :table specs)]
-      (<? (h/batch-write-item! creds {:put table-name->keys}))
-      (try
-        (<? (f))
-        (finally
-          (<? (h/batch-write-item!
-               creds {:delete
-                      (into {}
-                        (for [[{:keys [keys table]} items] specs]
-                          [table (map #(select-keys % keys) items)]))})))))))
+(def local-dynamo-url (env "LOCAL_DYNAMO_URL"))
+
+(defn with-items!
+  ([specs f]
+   (with-items! creds specs f))
+  ([creds specs f]
+   (go-catching
+     (let [table-name->keys (map-keys :table specs)]
+       (<? (h/batch-write-item! creds {:put table-name->keys}))
+       (try
+         (<? (f))
+         (finally
+           (<? (h/batch-write-item!
+                creds {:delete
+                       (into {}
+                         (for [[{:keys [keys table]} items] specs]
+                           [table (map #(select-keys % keys) items)]))}))))))))
 
 (def table :hildebrand-test-table)
 
@@ -60,3 +66,44 @@
       :project [:include [:data]]}]
     :global
     [create-global-index]}})
+
+;; The tests could just use one table.  This is only really a burden with the
+;; few tests which use Dynamo remotely (due to expectations about capacity
+;; consumption being returned, which doesn't happen with local Dynamo).  This is
+;; super slow remotely.
+(defn reset-tables! [creds tables]
+  (go-catching
+    (try
+      (<? (glossop.util/into []
+            (async/merge (for [{:keys [table]} tables]
+                           (h/delete-table! creds table)))))
+      (catch #? (:clj Exception :cljs js/Error) _))
+    (<? (glossop.util/into []
+          (async/merge (for [{:keys [table]} tables]
+                         (h/await-status! creds table nil)))))
+    (<? (glossop.util/into []
+          (async/merge (for [create tables]
+                         (h/ensure-table! creds create)))))))
+
+(def default-tables [create-table-default create-table-indexed])
+
+(defn with-local-dynamo
+  ([f] (with-local-dynamo default-tables f))
+  ([tables f]
+   (go-catching
+     (if-let [url (not-empty local-dynamo-url)]
+       (let [creds (assoc creds :endpoint url)]
+         (<? (reset-tables! creds tables))
+         (<? (f creds)))
+       (println "Warning: Skipping local test due to unset LOCAL_DYNAMO_URL")))))
+
+(defn with-remote-dynamo
+  ([f] (with-remote-dynamo default-tables f))
+  ([tables f]
+   (go-catching
+     (if (not-empty (:secret-key creds))
+       (do
+         (<? (reset-tables! creds tables))
+         (<? (f creds)))
+       (println "Warning: Skipping remote test due to unset AWS_SECRET_KEY")))))
+

@@ -1,6 +1,7 @@
 (ns hildebrand.internal.response
   (:require [clojure.set :as set]
             [clojure.walk :as walk]
+            [eulalie.platform :refer [b64-string->ba]]
             [hildebrand.internal.util :refer [type-aliases-in defmulti-dispatch]]
             [hildebrand.internal.platform.number :refer [string->number]]
             [plumbing.core :refer [map-vals #?@ (:clj [fn-> fn->> for-map])]])
@@ -17,10 +18,8 @@
       :NULL nil
       :SS   (into #{} (map keyword value))
       :NS   (into #{} (map string->number value))
-      ;; XXX
-      :BS   value
-      ;; XXX
-      :B    value)))
+      :BS   (into #{} (map b64-string->ba value))
+      :B    (b64-string->ba value))))
 
 (defn ->attr-def [{:keys [attribute-name attribute-type]}]
   [attribute-name (type-aliases-in attribute-type attribute-type)])
