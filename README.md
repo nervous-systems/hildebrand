@@ -7,6 +7,15 @@ DB](http://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction
 Built on top of [eulalie](https://github.com/nervous-systems/eulalie), it works
 with both Clojure and Clojurescript/Node.
 
+## Documentation
+
+The [API
+introduction](https://github.com/nervous-systems/hildebrand/wiki/API-Introduction)
+on the wiki is a good place to start. [This blog post](
+https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/08/hildebrand/) has a
+bunch of pre-1.0 usage examples in it - the namespace layout has changed
+slightly, but the ideas are the same.
+
 ## Clojurescript
 
 All of the functionality (barring the synchronous convenience functions) is
@@ -17,15 +26,6 @@ exposed via Clojurescript.  The implementation specifically targets
 The specific use case I had in mind for Node support is [writing AWS Lambda
 functions in
 Clojurescript](https://nervous.io/clojure/clojurescript/aws/lambda/node/lein/2015/07/05/lambda/).  Please see the [README for eulalie](https://github.com/nervous-systems/eulalie) for more details.
-
-## Documentation
-
-The [API
-introduction](https://github.com/nervous-systems/hildebrand/wiki/API-Introduction)
-on the wiki is a good place to start. [This blog post](
-https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/08/hildebrand/) has a
-bunch of pre-1.0 usage examples in it - the namespace layout has changed
-slightly, but the ideas are the same.
 
 [Contributions welcomed](https://github.com/nervous-systems/hildebrand/issues).
 
