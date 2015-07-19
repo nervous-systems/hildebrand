@@ -4,7 +4,7 @@
             [glossop.util]
             [hildebrand.test.common :as test.common
              :refer [table create-table-default creds
-                     with-local-dynamo with-remote-dynamo]]
+                     with-local-dynamo! with-remote-dynamo!]]
             #?@ (:clj
                  [[clojure.test :refer [is]]
                   [hildebrand.test.async :refer [deftest]]
@@ -29,7 +29,7 @@
         (.readInt8 x i))))
 
 (deftest binary-roundtrip
-  (with-local-dynamo
+  (with-local-dynamo!
     (fn [creds]
       (let [in #? (:clj
                    (.getBytes "\u00a5123Hello" "utf8")
@@ -46,7 +46,7 @@
 (def item {:name "Mephistopheles"})
 
 (deftest list-tables
-  (with-local-dynamo
+  (with-local-dynamo!
     (fn [creds]
       (go-catching
         (let [tables (<? (h/list-tables! creds {:limit 1}))]
@@ -54,31 +54,30 @@
           (is (-> tables meta :start-table)))))))
 
 (deftest get+nonexistent
-  (with-local-dynamo
+  (with-local-dynamo!
     (fn [creds]
       (go-catching
         (is (nil? (<? (h/get-item! creds table {:name "rofl"}))))))))
 
 (deftest put+get
-  (with-local-dynamo
+  (with-local-dynamo!
     (fn [creds]
       (go-catching
         (is (empty? (<? (h/put-item! creds table (assoc item :age 33)))))
         (is (= 33 (:age (<? (h/get-item! creds table item {:consistent true})))))))))
 
 (deftest put+conditional
-  (with-local-dynamo
+  (with-local-dynamo! {create-table-default [item]}
     (fn [creds]
-     (test.common/with-items! creds {create-table-default [item]}
-       #(go-catching
-          (is (= :conditional-failed
-                 (try
-                   (<? (h/put-item! creds table item {:when [:not-exists [:name]]}))
-                   (catch #? (:clj ExceptionInfo :cljs js/Error) e
-                          (-> e ex-data :type))))))))))
+     (go-catching
+       (is (= :conditional-failed
+              (try
+                (<? (h/put-item! creds table item {:when [:not-exists [:name]]}))
+                (catch #? (:clj ExceptionInfo :cljs js/Error) e
+                       (-> e ex-data :type)))))))))
 
 (deftest put+returning
-  (with-local-dynamo
+  (with-local-dynamo!
     (fn [creds]
       (go-catching
         (let [item' (assoc item :old "put-returning")]
@@ -86,7 +85,7 @@
           (is (= item' (<? (h/put-item! creds table item {:return :all-old})))))))))
 
 (deftest put+meta
-  (with-remote-dynamo [create-table-default]
+  (with-remote-dynamo! [create-table-default]
     (fn [creds]
       (go-catching
         (<? (h/put-item! creds table item {:capacity :total}))
@@ -94,43 +93,39 @@
           (is (= table (-> item meta :capacity :table))))))))
 
 (deftest delete
-  (with-local-dynamo
+  (with-local-dynamo! {create-table-default [item]}
     (fn [creds]
-      (test.common/with-items! creds {create-table-default [item]}
-        #(go-catching
-           (is (empty? (<? (h/delete-item! creds table item)))))))))
+      (go-catching
+        (is (empty? (<? (h/delete-item! creds table item))))))))
 
 (deftest delete+cc
-  (with-remote-dynamo [create-table-default]
+  (with-remote-dynamo! {create-table-default [item]}
     (fn [creds]
-      (test.common/with-items! creds {create-table-default [item]}
-        #(go-catching
-           (is (= table
-                  (->
-                   (h/delete-item! creds table item {:capacity :total :return :all-old})
-                   <?
-                   meta
-                   :capacity
-                   :table))))))))
+      (go-catching
+        (is (= table
+               (->
+                (h/delete-item! creds table item {:capacity :total :return :all-old})
+                <?
+                meta
+                :capacity
+                :table)))))))
 
 (deftest delete+expected-expr
-  (with-local-dynamo
+  (with-local-dynamo! {create-table-default [(assoc item :age 33 :hobby "Strolling")]}
     (fn [creds]
-      (test.common/with-items!
-        creds {create-table-default [(assoc item :age 33 :hobby "Strolling")]}
-        #(go-catching
-           (is (empty?
-                (<? (h/delete-item!
-                     creds table item
-                     {:when
-                      [:and
-                       [:<= 30 ^:hildebrand/path [:age]]
-                       [:<= [:age] 34]
-                       [:in [:age] [30 33 34]]
-                       [:not [:in [:age] #{30 34}]]
-                       [:or
-                        [:begins-with [:hobby] "St"]
-                        [:begins-with [:hobby] "Tro"]]]})))))))))
+      (go-catching
+        (is (empty?
+             (<? (h/delete-item!
+                  creds table item
+                  {:when
+                   [:and
+                    [:<= 30 ^:hildebrand/path [:age]]
+                    [:<= [:age] 34]
+                    [:in [:age] [30 33 34]]
+                    [:not [:in [:age] #{30 34}]]
+                    [:or
+                     [:begins-with [:hobby] "St"]
+                     [:begins-with [:hobby] "Tro"]]]}))))))))
 
 ;; long story
 #? (:clj
@@ -138,22 +133,20 @@
       (let [keyed-item (merge item attrs-in)
             exp        (merge item attrs-out)]
         (if (:ns &env)
-          `(with-local-dynamo
+          `(with-local-dynamo! ~{create-table-default [keyed-item]}
              (fn [creds#]
-               (test.common/with-items! creds# ~{create-table-default [keyed-item]}
-                 #(glossop.macros/go-catching
-                    (cemerick.cljs.test/is
-                     (= ~exp
-                        (glossop.macros/<?
-                         (h/update-item!
-                          creds# ~table ~item ~updates {:return :all-new}))))))))
-          `(with-local-dynamo
+               (glossop.macros/go-catching
+                 (cemerick.cljs.test/is
+                  (= ~exp
+                     (glossop.macros/<?
+                      (h/update-item!
+                       creds# ~table ~item ~updates {:return :all-new})))))))
+          `(with-local-dynamo! ~{create-table-default [keyed-item]}
              (fn [creds#]
-               (test.common/with-items! creds# ~{create-table-default [keyed-item]}
-                 #(go-catching
-                    (is (= ~exp
-                           (<? (h/update-item!
-                                creds# ~table ~item ~updates {:return :all-new}))))))))))))
+               (go-catching
+                 (is (= ~exp
+                        (<? (h/update-item!
+                             creds# ~table ~item ~updates {:return :all-new})))))))))))
 
 (deftest update-item
   (update-test
@@ -251,13 +244,13 @@
     (assoc item :name (str "batch-write-" i))))
 
 (deftest batch-write
-  (with-local-dynamo
+  (with-local-dynamo!
     (fn [creds]
       (go-catching
         (is (empty? (<? (h/batch-write-item! creds {:put {table items}}))))))))
 
 (deftest batch-write+get
-  (with-local-dynamo
+  (with-local-dynamo!
     (fn [creds]
       (go-catching
         (<? (h/batch-write-item! creds {:put {table items}}))
@@ -268,15 +261,13 @@
                  (into #{} (responses table)))))))))
 
 (deftest query
-  (with-local-dynamo
+  (with-local-dynamo! {create-table-default [{:name "Mephistopheles"}]}
     (fn [creds]
-      (test.common/with-items! creds {create-table-default [{:name "Mephistopheles"}]}
-        (fn []
-          (go-catching
-            (is (= [{:name "Mephistopheles"}]
-                   (map #(select-keys % #{:name})
-                        (<? (h/query! creds table
-                                      {:name [:= "Mephistopheles"]})))))))))))
+      (go-catching
+        (is (= [{:name "Mephistopheles"}]
+               (map #(select-keys % #{:name})
+                    (<? (h/query! creds table
+                                  {:name [:= "Mephistopheles"]})))))))))
 
 (def ->game-item (partial zipmap [:user-id :game-title :timestamp :data]))
 (def indexed-items
@@ -285,37 +276,34 @@
         ["moe" "Wii Fit" 2]]))
 
 (deftest query+local-index
-  (with-local-dynamo
+  (with-local-dynamo! {test.common/create-table-indexed indexed-items}
     (fn [creds]
-      (test.common/with-items! creds {test.common/create-table-indexed indexed-items}
-        #(go-catching
-           (is (= [(first indexed-items)]
-                  (<? (h/query!
-                       creds
-                       test.common/indexed-table
-                       {:user-id [:= "moe"] :timestamp [:< 2]}
-                       {:index test.common/local-index})))))))))
+      (go-catching
+        (is (= [(first indexed-items)]
+               (<? (h/query!
+                    creds
+                    test.common/indexed-table
+                    {:user-id [:= "moe"] :timestamp [:< 2]}
+                    {:index test.common/local-index}))))))))
 
 (deftest query+filter
-  (with-local-dynamo
+  (with-local-dynamo! {test.common/create-table-indexed indexed-items}
     (fn [creds]
-      (test.common/with-items! creds {test.common/create-table-indexed indexed-items}
-        #(go-catching
-           (is (= [(first indexed-items)]
-                  (<? (h/query!
-                       creds
-                       test.common/indexed-table
-                       {:user-id [:= "moe"]}
-                       {:filter [:< [:timestamp] 2]})))))))))
+      (go-catching
+        (is (= [(first indexed-items)]
+               (<? (h/query!
+                    creds
+                    test.common/indexed-table
+                    {:user-id [:= "moe"]}
+                    {:filter [:< [:timestamp] 2]}))))))))
 
 (deftest scan
-  (with-local-dynamo
-    (fn [creds]
-      (let [items (for [i (range 5)]
-                    {:name     (str "scan-test-" i)
-                     :religion "scan-test"})]
-        (test.common/with-items! creds {create-table-default items}
-          #(go-catching
-             (is (= (into #{} items)
-                    (into #{} (<? (h/scan! creds table
-                                           {:filter [:= [:religion] "scan-test"]})))))))))))
+  (let [items (for [i (range 5)]
+                {:name     (str "scan-test-" i)
+                 :religion "scan-test"})]
+    (with-local-dynamo! {create-table-default items}
+      (fn [creds]
+        (go-catching
+          (is (= (into #{} items)
+                 (into #{} (<? (h/scan! creds table
+                                        {:filter [:= [:religion] "scan-test"]}))))))))))

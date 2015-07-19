@@ -87,23 +87,28 @@
 
 (def default-tables [create-table-default create-table-indexed])
 
-(defn with-local-dynamo
-  ([f] (with-local-dynamo default-tables f))
-  ([tables f]
+(defn with-local-dynamo!
+  ([f] (with-local-dynamo! default-tables f))
+  ([tables+items f]
    (go-catching
      (if-let [url (not-empty local-dynamo-url)]
-       (let [creds (assoc creds :endpoint url)]
+       (let [tables (cond-> tables+items (map? tables+items) keys)
+             creds (assoc creds :endpoint url)]
          (<? (reset-tables! creds tables))
-         (<? (f creds)))
+         (if (map? tables+items)
+           (<? (with-items! creds tables+items (partial f creds)))
+           (<? (f creds))))
        (println "Warning: Skipping local test due to unset LOCAL_DYNAMO_URL")))))
 
-(defn with-remote-dynamo
-  ([f] (with-remote-dynamo default-tables f))
-  ([tables f]
+(defn with-remote-dynamo!
+  ([f] (with-remote-dynamo! default-tables f))
+  ([tables+items f]
    (go-catching
      (if (not-empty (:secret-key creds))
-       (do
+       (let [tables (cond-> tables+items (map? tables+items) keys)]
          (<? (reset-tables! creds tables))
-         (<? (f creds)))
+         (if (map? tables+items)
+           (<? (with-items! creds tables+items (partial f creds)))
+           (<? (f creds))))
        (println "Warning: Skipping remote test due to unset AWS_SECRET_KEY")))))
 

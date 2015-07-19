@@ -29,7 +29,9 @@ exposed via Clojurescript.  The implementation specifically targets
 
 The specific use-case I had in mind for Node support is [writing AWS Lambda
 functions in
-Clojurescript](https://nervous.io/clojure/clojurescript/aws/lambda/node/lein/2015/07/05/lambda/).  Please see the [eulalie README](https://github.com/nervous-systems/eulalie) for more details.
+Clojurescript](https://nervous.io/clojure/clojurescript/aws/lambda/node/lein/2015/07/05/lambda/).
+Please see the [eulalie README](https://github.com/nervous-systems/eulalie) for
+more details on the Node implementation.
 
 ## Development
 
@@ -38,7 +40,8 @@ Most of the integration tests expect an instance of DynamoDB Local.  If the
 
 A couple of the tests expect to get capacity information back from Dynamo, and
 so can't run against a local instance.  If `AWS_ACCESS_KEY` and `AWS_SECRET_KEY`
-are set, these tests will try to connect and create some tables.
+are set, these tests will try to connect and create some tables (in Dynamo's
+default region, `us-east-1`).
 
 Assuming a local Node install, `lein cljsbuild test` will run the Clojurescript
 tests.
