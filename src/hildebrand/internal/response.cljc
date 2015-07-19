@@ -89,6 +89,9 @@
   ;; These are a subset of global indexes
   (update-in m [:indexes :local] into (map ->local-index v)))
 
+(defmethod transform-table-kv :creation-date-time [k v m]
+  (assoc m k (Math/round ^Double (* 1000 v))))
+
 (defn ->table-description [m]
   (set/rename-keys
    (reduce
@@ -133,7 +136,7 @@
       item)))
 
 (defmethod restructure-response* :list-tables [_ {:keys [tables end-table]}]
-  (with-meta tables {:end-table end-table}))
+  (with-meta tables {:start-table end-table}))
 
 (defmethod restructure-response* :query [_ {:keys [items] :as m}]
   (with-meta (or items []) (dissoc m :items)))
@@ -144,18 +147,20 @@
 (defn error [type message & [data]]
   (assoc data :hildebrand/error {:type type :message message}))
 
-(defn maybe-unprocessed-error [unprocessed]
+(defn maybe-unprocessed-error [unprocessed & [result]]
   (when (not-empty unprocessed)
     (error :unprocessed-items
            (str (count unprocessed) "unprocessed items")
-           {:unprocessed unprocessed})))
+           {:unprocessed unprocessed
+            :result result})))
 
 (defmethod restructure-response* :batch-get-item [_ {:keys [unprocessed responses] :as m}]
-  (or (maybe-unprocessed-error unprocessed)
-      (with-meta
-        (for-map [[t items] responses]
-          t (map ->item items))
-        m)))
+  (let [result (with-meta
+                 (for-map [[t items] responses]
+                   t (map ->item items))
+                 m)]
+    (or (maybe-unprocessed-error unprocessed result)
+        result)))
 
 (defmethod restructure-response* :batch-write-item [_ {:keys [unprocessed] :as resp}]
   (or (maybe-unprocessed-error unprocessed)

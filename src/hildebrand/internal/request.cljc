@@ -4,7 +4,7 @@
             [hildebrand.internal.expr :as expr]
             [hildebrand.internal.platform.number :refer [boolean? ddb-num?]]
             [hildebrand.internal.util :refer [type-aliases-out throw-empty]]
-            [plumbing.core :refer [map-vals #?@ (:clj [for-map])]])
+            [plumbing.core :refer [map-vals grouped-map #?@ (:clj [for-map])]])
   #? (:cljs
       (:require-macros [plumbing.core :refer [for-map map-vals]])))
 
@@ -35,7 +35,7 @@
   (for-map [[k v] m]
     (name k) (to-attr-value v)))
 
-(def comparison-ops {:< :lt :<= :le := :eq :> :gt :>= :ge})
+(def comparison-ops {:< :lt :<= :le := :eq :> :gt :>= :ge :begins-with :begins_with})
 
 (defn ->key-conds [conds]
   (for-map [[col [op & args]] conds]
@@ -54,13 +54,14 @@
    :attribute-type (type-aliases-out v v)})
 
 (defn lift-projection-expression [m v]
-  (let [names (into {}
-                (for [col v :when (expr/aliased-col? col)]
-                  [col (expr/unalias-col col)]))]
-
-    (cond-> m
-      (not-empty names) (assoc :expression-attribute-names names)
-      (not-empty v)     (assoc :projection-expression v))))
+  (if (not-empty v)
+    (let [alias->col (into {}
+                       (for [col v]
+                         [(str "#" (name (gensym))) col]))]
+      (assoc m
+             :expression-attribute-names alias->col
+             :projection-expression (keys alias->col)))
+    v))
 
 (defn lift-expression [req v out-key]
   (if-let [{:keys [expr values attrs]} (map-vals not-empty v)]
@@ -146,6 +147,7 @@
 
 (defn restructure-index
   [{:keys [name throughput keys] [tag & [arg]] :project :as m}]
+  (println m name)
   (cond-> {:index-name name}
     keys (assoc :key-schema (->keys keys))
     arg  (assoc-in [:projection :non-key-attributes] arg)
@@ -164,11 +166,8 @@
                                   (map restructure-index local))))
     :update-table
     (assoc m :global-secondary-index-updates
-           (mapcat
-            (fn [[op indexes]]
-              (for [index indexes]
-                {op (restructure-index index)}))
-            v))))
+           (for [[op index] v]
+             {op (restructure-index index)}))))
 
 (defn ->batch-req [type m]
   (let [m (->item m)]

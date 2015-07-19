@@ -68,7 +68,8 @@
     #(go-catching
        (is (= table
               (->
-               (h/delete-item! creds table item {:capacity :total})
+               (h/delete-item! creds table item
+                               {:capacity :total :return :all-old})
                <?
                meta
                :capacity

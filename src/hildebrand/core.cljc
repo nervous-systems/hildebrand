@@ -43,7 +43,7 @@ Returns an empty map unless `:return` is set to to `:all-old`.")
 Returns an empty map unless `:return` is set to `:all-old`, and the put
 overwrites an existing item." )
 (defissuer describe-table [table])
-(defissuer update-table   [table attrs]
+(defissuer update-table   [table]
   "`attrs` is a map of attribute names to symbolic types, describing the
 attributes of the table." )
 (defissuer list-tables    [])
@@ -93,3 +93,21 @@ delete." )
         (<? (await-status! creds table :active))))))
 
 #? (:clj (def ensure-table!! (comp <?! ensure-table!)))
+
+(defn scan-count! [creds table & [extra]]
+  (go-catching
+    (-> (scan! creds table (assoc extra :select :count))
+        <?
+        meta
+        :count)))
+
+#? (:clj (def scan-count!! (comp <?! scan-count!)))
+
+(defn query-count! [creds table where & [extra]]
+  (go-catching
+    (-> (query! creds table where (assoc extra :select :count))
+        <?
+        meta
+        :count)))
+
+#? (:clj (def query-count!! (comp <?! query-count!)))
