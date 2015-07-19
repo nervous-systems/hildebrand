@@ -60,7 +60,7 @@
 
 (defn batching-channel
   [{:keys [issue-fn period-ms threshold in-chan error-chan timeout-fn]
-    :or {period-ms 200 threshold 10 timeout-fn async/timeout}}]
+    :or {period-ms 200 threshold 25 timeout-fn async/timeout}}]
   (let [in-chan    (or in-chan (async/chan))
         error-chan (or error-chan (async/chan))]
     (go-catching
@@ -89,8 +89,8 @@
                              {table batch}
                              (grouped-map first second batch))})))))
 
-(defn batching-puts [{:keys [creds table batch-opts] :as arg}]
-  (batching-something :put arg))
+(defn batching-puts [creds & [{:keys [table batch-opts] :as arg}]]
+  (batching-something :put (assoc arg :creds creds)))
 
-(defn batching-deletes [{:keys [creds table batch-opts] :as arg}]
-  (batching-something :delete arg))
+(defn batching-deletes [creds & [{:keys [table batch-opts] :as arg}]]
+  (batching-something :delete (assoc arg :creds creds)))

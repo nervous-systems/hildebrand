@@ -74,7 +74,7 @@
               (try
                 (<? (h/put-item! creds table item {:when [:not-exists [:name]]}))
                 (catch #? (:clj ExceptionInfo :cljs js/Error) e
-                       (-> e ex-data :type)))))))))
+                  (-> e ex-data :type)))))))))
 
 (deftest put+returning
   (with-local-dynamo!

@@ -10,6 +10,21 @@ with both Clojure and Clojurescript/Node.
 Advanced Dynamo features, including the [DynamoDB Streams
 API](http://aws.amazon.com/dynamodb/faqs/#triggers) are fully implemented.
 
+## Snippet
+
+```clojure
+(require '[hildebrand.channeled :refer [query! batching-deletes]])
+
+(let [[results errors]
+      (->> (query! creds :games
+                   {:user-id [:= "moea"]
+                    :game-title [:begins-with "Super"]}
+                   {:filter [:< [:score] 100]})
+           (async/split map?))
+      {delete-chan :in-chan} (batching-deletes creds {:table :games})]
+  (async/pipe results delete-chan))
+```
+
 ## Documentation
 
 - The [API
