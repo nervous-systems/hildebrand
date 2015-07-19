@@ -11,7 +11,7 @@
          [cljs.core.async :as async]])
    [hildebrand.test.common :as test.common :refer
     [create-table-indexed indexed-table with-local-dynamo!]]
-   [hildebrand.page :as page]
+   [hildebrand.channeled :as channeled]
    [hildebrand.core :as h])
   #? (:cljs (:require-macros [glossop.macros :refer [<? go-catching]]
                              [hildebrand.test.async.macros :refer [deftest]]
