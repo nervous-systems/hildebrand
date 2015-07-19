@@ -9,12 +9,13 @@ with both Clojure and Clojurescript/Node.
 
 ## Documentation
 
-The [API
+- The [API
 introduction](https://github.com/nervous-systems/hildebrand/wiki/API-Introduction)
-on the wiki is a good place to start. [This blog post](
-https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/08/hildebrand/) has a
-bunch of pre-1.0 usage examples in it - the namespace layout has changed
-slightly, but the ideas are the same.
+on the wiki is a good place to start.
+- [Introducing Hildebrand](
+https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/08/hildebrand/), a blog
+post, has a bunch of pre-1.0 usage examples in it - the namespace layout has
+changed slightly, but the ideas are the same.
 
 ## Clojurescript
 
@@ -23,9 +24,9 @@ exposed via Clojurescript.  The implementation specifically targets
 [Node](https://nodejs.org/), and uses
 [lein-npm](https://github.com/RyanMcG/lein-npm) for declaring its dependencies.
 
-The specific use case I had in mind for Node support is [writing AWS Lambda
+The specific use-case I had in mind for Node support is [writing AWS Lambda
 functions in
-Clojurescript](https://nervous.io/clojure/clojurescript/aws/lambda/node/lein/2015/07/05/lambda/).  Please see the [README for eulalie](https://github.com/nervous-systems/eulalie) for more details.
+Clojurescript](https://nervous.io/clojure/clojurescript/aws/lambda/node/lein/2015/07/05/lambda/).  Please see the [eulalie README](https://github.com/nervous-systems/eulalie) for more details.
 
 [Contributions welcomed](https://github.com/nervous-systems/hildebrand/issues).
 
