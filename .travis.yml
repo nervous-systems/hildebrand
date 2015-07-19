@@ -1,6 +1,6 @@
 language: clojure
 lein: lein2
-script: lein2 test hildebrand.test.core hildebrand.test.page hildebrand.test.internal.request
+script: lein2 test hildebrand.test.core hildebrand.test.channeled hildebrand.test.internal.request
   hildebrand.test.internal.response
 env:
     global:
