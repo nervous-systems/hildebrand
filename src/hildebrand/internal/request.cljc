@@ -3,8 +3,9 @@
             [clojure.set :as set]
             [hildebrand.internal.expr :as expr]
             [hildebrand.internal.platform.number :refer [boolean? ddb-num?]]
-            [hildebrand.internal.util :refer [type-aliases-out throw-empty]]
-            [plumbing.core :refer [map-vals grouped-map #?@ (:clj [for-map])]])
+            [hildebrand.internal.util
+             :refer [type-aliases-out throw-empty defmulti-dispatch]]
+            [plumbing.core :refer [map-vals #?@ (:clj [for-map])]])
   #? (:cljs
       (:require-macros [plumbing.core :refer [for-map map-vals]])))
 
@@ -15,6 +16,12 @@
       (every? ddb-num? v)  {:NS (map str     v)}
       :else (assert false "Invalid set type"))))
 
+(declare to-attr-value)
+
+(defn ->item [m]
+  (for-map [[k v] m]
+    (name k) (to-attr-value v)))
+
 (defn to-attr-value [v]
   (let [v (cond-> v (keyword? v) name)]
     (cond
@@ -23,17 +30,12 @@
       (boolean? v) {:BOOL v}
       (ddb-num? v) {:N (str v)}
       (vector?  v) {:L (map to-attr-value v)}
-      (map?     v)     {:M (for-map [[k v'] v]
-                             (name k) (to-attr-value v'))}
+      (map?     v) {:M (->item v)}
       (set?     v) (to-set-attr v)
       ;; This is basically a hack for binary support - you could supply
       ;; e.g. #hildebrand/literal {:BS ...}
       (expr/hildebrand-literal? v) v
       :else (assert false (str "Invalid value " (type v))))))
-
-(defn ->item [m]
-  (for-map [[k v] m]
-    (name k) (to-attr-value v)))
 
 (def comparison-ops {:< :lt :<= :le := :eq :> :gt :>= :ge :begins-with :begins_with})
 
@@ -42,26 +44,18 @@
     col {:attribute-value-list (map to-attr-value args)
          :comparison-operator  (comparison-ops op op)}))
 
-(def ->key-schema
-  (partial
-   map
-   (fn [t attr]
-     {:attribute-name (name attr)
-      :key-type t}) [:hash :range]))
-
 (defn ->attr-value [[k v]]
   {:attribute-name (name k)
    :attribute-type (type-aliases-out v v)})
 
-(defn lift-projection-expression [m v]
+(defn lift-projection-expression [m k v]
   (if (not-empty v)
-    (let [alias->col (into {}
-                       (for [col v]
-                         [(str "#" (name (gensym))) col]))]
+    (let [alias->col (for-map [col v]
+                       (str "#" (name (gensym))) col)]
       (assoc m
              :expression-attribute-names alias->col
              :projection-expression (keys alias->col)))
-    v))
+    m))
 
 (defn lift-expression [req v out-key]
   (if-let [{:keys [expr values attrs]} (map-vals not-empty v)]
@@ -72,19 +66,18 @@
     req))
 
 (defn lift-condition-expression
-  [req v & [{:keys [out-key]
-             :or {out-key :condition-expression}}]]
+  [req k v & [{:keys [out-key]
+               :or {out-key :condition-expression}}]]
   (lift-expression req (expr/cond-expr->statement v) out-key))
 
-(defn lift-update-expression [req v]
-  (lift-expression
-   req (expr/update-ops->statement v) :update-expression))
+(defn lift-update-expression [req k v]
+  (lift-expression req (expr/update-ops->statement v) :update-expression))
 
 (defn ->projection [[tag & [arg]]]
   (cond-> {:projection-type tag}
     arg (assoc :non-key-attributes arg)))
 
-(defmulti  transform-request-kv (fn [k v m parent-k] k))
+(defmulti transform-request-kv (fn [m k v parent-k] k))
 
 (def renames
   {:index       :index-name
@@ -100,18 +93,12 @@
    :throughput  :provisioned-throughput
    :segments    :total-segments})
 
-(def rename #(set/rename-keys % renames))
+(defmethod transform-request-kv :default [m k v target] (assoc m k v))
 
-(defmethod transform-request-kv :default [k v m target]
-  (assoc m k v))
-
-(defmethod transform-request-kv :attrs [k v m target]
+(defmethod transform-request-kv :attrs [m k v target]
   (if (#{:create-table :update-table} target)
     (assoc m :attribute-definitions (map ->attr-value v))
-    (lift-projection-expression m v)))
-
-(defmethod transform-request-kv :key [k v m target]
-  (assoc m k (->item v)))
+    (lift-projection-expression m k v)))
 
 (defn ->keys [v]
   (map
@@ -120,21 +107,18 @@
       :key-type t})
    [:hash :range] v))
 
-(defmethod transform-request-kv :keys [k v m target]
+(defmethod transform-request-kv :keys [m k v target]
   (if (= target :get-item)
     (assoc m k (map ->item v))
     (assoc m :key-schema (->keys v))))
 
-(defmulti  prepare-request (fn [target body] target))
-(defmethod prepare-request :default [_ body]
-  body)
-
 (defn restructure-request [target body]
-  (rename
+  (set/rename-keys
    (reduce
     (fn [acc [k v]]
-      (transform-request-kv k v acc target))
-    nil (prepare-request target body))))
+      (transform-request-kv acc k v target))
+    nil body)
+   renames))
 
 (def ->throughput
   #(set/rename-keys
@@ -142,12 +126,8 @@
     {:read :read-capacity-units
      :write :write-capacity-units}))
 
-(defmethod transform-request-kv :throughput [k v m target]
-  (assoc m k (->throughput v)))
-
 (defn restructure-index
   [{:keys [name throughput keys] [tag & [arg]] :project :as m}]
-  (println m name)
   (cond-> {:index-name name}
     keys (assoc :key-schema (->keys keys))
     arg  (assoc-in [:projection :non-key-attributes] arg)
@@ -155,7 +135,7 @@
     throughput (assoc :provisioned-throughput
                       (->throughput throughput))))
 
-(defmethod transform-request-kv :indexes [k v m parent]
+(defmethod transform-request-kv :indexes [m k v parent]
   (case parent
     :create-table
     (let [{:keys [global local]} v]
@@ -175,42 +155,39 @@
       :delete {:delete-request {:key  m}}
       :put    {:put-request    {:item m}})))
 
-(defn lift-batch-ops [k v m]
+(defn lift-batch-ops [m k v]
   (reduce
    (fn [m [table ops]]
-     (let [ops (map (partial ->batch-req k) ops)]
+     (let [ops (for [op ops] (->batch-req k op))]
        (update-in m [:request-items table] concat ops)))
    (dissoc m k) v))
 
-(defmethod transform-request-kv :delete [k v m parent]
-  (lift-batch-ops k v m))
-
-(defmethod transform-request-kv :put [k v m parent]
-  (lift-batch-ops k v m))
-
-(defmethod transform-request-kv :project [k v m target]
-  (lift-projection-expression m v))
-
-(defmethod transform-request-kv :sort [k v m target]
-  (assoc m k (= v :asc)))
-
-(defmethod transform-request-kv :items [k v m target]
+(defmethod transform-request-kv :items [m k v target]
   (assoc m :request-items
          (for-map [[t req] v]
            t (restructure-request :get-item req))))
 
-(defmethod transform-request-kv :filter [k v m target]
+(defmethod transform-request-kv :filter [m k v target]
   (lift-condition-expression
-   m v {:out-key :filter-expression}))
+   m k v {:out-key :filter-expression}))
 
-(defmethod transform-request-kv :where [k v m target]
-  (assoc m k (->key-conds v)))
+(defmulti-dispatch transform-request-kv
+  (map-vals
+   (fn [handler]
+     (fn [m k v _] (handler m k v)))
+   {:delete  lift-batch-ops
+    :put     lift-batch-ops
+    :project lift-projection-expression
+    :when    lift-condition-expression
+    :update  lift-update-expression}))
 
-(defmethod transform-request-kv :when [k v m target]
-  (lift-condition-expression m v))
+(defmulti-dispatch transform-request-kv
+  (map-vals
+   (fn [handler]
+     (fn [m k v _] (assoc m k (handler v))))
+   {:where ->key-conds
+    :item  ->item
+    :key   ->item
+    :throughput ->throughput
+    :sort (partial = :asc)}))
 
-(defmethod transform-request-kv :update [k v m target]
-  (lift-update-expression m v))
-
-(defmethod transform-request-kv :item [k v m target]
-  (assoc m k (->item v)))

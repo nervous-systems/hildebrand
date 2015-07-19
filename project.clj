@@ -8,12 +8,9 @@
   :global-vars {*warn-on-reflection* true
                 *print-meta* true}
   :source-paths ["src"]
-  :plugins [[codox "0.8.11"]
-            [lein-cljsbuild "1.0.6"]
+  :plugins [[lein-cljsbuild "1.0.6"]
             [lein-npm "0.5.0"]
             [com.cemerick/clojurescript.test "0.3.3"]]
-  :codox {:include [hildebrand]
-          :defaults {:doc/format :markdown}}
   :dependencies
   [[org.clojure/clojure        "1.7.0"]
    [org.clojure/clojurescript  "0.0-3308"]

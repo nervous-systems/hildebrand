@@ -1,8 +1,10 @@
 (ns hildebrand.test.internal.request
-  (:require #? (:clj
+  (:require #?
+            (:clj
                 [clojure.test :refer [deftest is]]
                 :cljs
                 [cemerick.cljs.test])
+            [clojure.walk :as walk]
             [hildebrand.internal.request :refer [restructure-request]])
   #? (:cljs (:require-macros [cemerick.cljs.test :refer [deftest is]])))
 
@@ -61,18 +63,28 @@
            :delete {:table-one [{:user 1}]}
            :put    {:table-two [{:user 2}]}}))))
 
+(defn undo-project-alias
+  [{:keys [expression-attribute-names projection-expression] :as m}]
+  (let [replacements
+        (into {} (for [[alias col] expression-attribute-names]
+                   [alias (keyword "alias" (name col))]))]
+    (walk/prewalk-replace replacements m)))
+
 (deftest batch-get-item
-  (is (= {:request-items
-          {:table-one {:consistent-read true
-                        :expression-attribute-names {:#a "a"}
-                        :projection-expression [:#a]
-                        :keys [{"user" {:N "1"}}]}}}
-         (restructure-request
-          :batch-get-item
-          {:items {:table-one
-                   {:consistent true
-                    :keys [{:user 1}]
-                    :attrs [:#a]}}}))))
+  (let [result (-> (restructure-request
+                    :batch-get-item
+                    {:items {:table-one
+                             {:consistent true
+                              :keys [{:user 1}]
+                              :attrs [:a]}}})
+                   :request-items
+                   :table-one
+                   undo-project-alias)]
+    (is (= result
+           {:consistent-read true
+            :keys [{"user" {:N "1"}}]
+            :projection-expression [:alias/a]
+            :expression-attribute-names {:alias/a :a}}))))
 
 
 ;; Don't test any expression-related stuff, since we're not in a
@@ -84,17 +96,19 @@
           {:user-id
            {:attribute-value-list [{:N "5"}]
             :comparison-operator :eq}}
-          :projection-expression [:#name :age]
-          :expression-attribute-names {:#name "name"}
+          :projection-expression [:alias/name :alias/age]
+          :expression-attribute-names {:alias/name :name
+                                       :alias/age  :age}
           :scan-index-forward true
           :consistent-read true}
-         (restructure-request
-          :query
-          {:table :users
-           :where {:user-id [:eq 5]}
-           :attrs  [:#name :age]
-           :consistent true
-           :sort :asc}))))
+         (-> (restructure-request
+              :query
+              {:table :users
+               :where {:user-id [:eq 5]}
+               :attrs  [:name :age]
+               :consistent true
+               :sort :asc})
+             undo-project-alias))))
 
 (deftest delete-item
   (is (= {:table-name :users
@@ -143,10 +157,10 @@
               :update-table
               {:attrs {:x :string}
                :table :users
-               :indexes {:create [gs-index-in]
-                         :delete [{:name :amazing-index}]
-                         :update [{:name :other-index
-                                   :throughput {:read 1 :write 1}}]}
+               :indexes [[:create gs-index-in]
+                         [:delete {:name :amazing-index}]
+                         [:update {:name :other-index
+                                   :throughput {:read 1 :write 1}}]]
                :throughput {:read 5 :write 3}})
              (update-in [:global-secondary-index-updates] (partial into #{}))))))
 

@@ -43,3 +43,24 @@
   (is (= table-description-in
          (restructure-response
           :update-table table-description-out))))
+
+(deftest get-item
+  (is (= {:name "Joseph"}
+         (restructure-response
+          :get-item {:item {:name {:S "Joseph"}}}))))
+
+
+(deftest batch-get-item
+  (is (= {:hildebrand-test-table [{:name "Moe"}]}
+         (restructure-response
+          :batch-get-item
+          {:responses {:hildebrand-test-table [{:name {:S "Moe"}}]}
+           :unprocessed-keys {}}))))
+
+(deftest query
+  (is (= [{:name "Mephistopheles"}]
+         (restructure-response
+          :query
+          {:count 1
+           :items [{:name {:S "Mephistopheles"}}]
+           :scanned-count 1}))))

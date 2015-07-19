@@ -1,17 +1,14 @@
 (ns hildebrand.test.core
   (:require [clojure.walk :as walk]
             [hildebrand.core :as h]
-            [plumbing.core :refer [map-keys dissoc-in]]
-            [hildebrand.test.common :as test.common :refer
-             [table create-table-default creds]]
+            [hildebrand.test.common :as test.common
+             :refer [table create-table-default creds]]
             #?@ (:clj
-                 [[clojure.core.async :as async]
-                  [clojure.test :refer [is]]
+                 [[clojure.test :refer [is]]
                   [hildebrand.test.async :refer [deftest]]
                   [glossop.core :refer [go-catching <?]]]
                  :cljs
-                 [[cemerick.cljs.test]
-                  [cljs.core.async :as async]]))
+                 [[cemerick.cljs.test]]))
   #? (:clj
       (:import (clojure.lang ExceptionInfo))
       :cljs
@@ -26,7 +23,7 @@
   (go-catching
     (let [tables (<? (h/list-tables! creds {:limit 1}))]
       (is (= 1 (count tables)))
-      (is (-> tables meta :end-table)))))
+      (is (-> tables meta :start-table)))))
 
 (deftest get+nonexistent
   (go-catching
@@ -54,8 +51,8 @@
 
 (deftest put+meta
   (go-catching
-    (let [item (<? (h/put-item! creds table item {:capacity :total}))]
-      (is (empty? item))
+    (<? (h/put-item! creds table item {:capacity :total}))
+    (let [item (<? (h/put-item! creds table item {:capacity :total :return :all-old}))]
       (is (= table (-> item meta :capacity :table))))))
 
 (deftest delete
@@ -264,17 +261,6 @@
                    test.common/indexed-table
                    {:user-id [:= "moe"]}
                    {:filter [:< [:timestamp] 2]})))))))
-
-(deftest query+global-index
-  (test.common/with-items! {test.common/create-table-indexed indexed-items}
-    #(go-catching
-       (is (= [(-> indexed-items first (dissoc :data))]
-              (<? (h/query!
-                   creds
-                   test.common/indexed-table
-                   {:game-title [:= "Super Metroid"]
-                    :timestamp  [:< 2]}
-                   {:index test.common/global-index})))))))
 
 (deftest scan
   (let [items (for [i (range 5)]

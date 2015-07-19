@@ -1,6 +1,7 @@
 language: clojure
 lein: lein2
-script: lein2 test
+script: lein2 test hildebrand.test.core hildebrand.test.page hildebrand.test.internal.request hildebrand.test.internal.response
+
 env:
     global:
         - secure: "IGqRxG4fBSTlYP0yGtpOVWHem3O5GNqutrD5T6fDD/0vVx45nO4ywpjGQIuWMBi/0yetQ3OpYWMvGEHBhmiBOLj8RhTQ9UqIr5eKTWitWUQFsWD8HoL4isUAcUzssvdpmrmAyiSDhdmGiFibUpF9dNBFaZz4exDX1h4lgihE5ds="

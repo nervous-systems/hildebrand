@@ -1,14 +1,14 @@
 (ns hildebrand.internal.response
   (:require [clojure.set :as set]
             [clojure.walk :as walk]
-            [hildebrand.internal.util :refer [type-aliases-in]]
+            [hildebrand.internal.util :refer [type-aliases-in defmulti-dispatch]]
             [hildebrand.internal.platform.number :refer [string->number]]
             [plumbing.core :refer [map-vals #?@ (:clj [fn-> fn->> for-map])]])
   #? (:cljs (:require-macros [plumbing.core :refer [fn-> fn->> for-map]])))
 
 (defn from-attr-value [m]
   (let [[[tag value]] (seq m)]
-    (condp = tag
+    (case tag
       :S    value
       :N    (string->number value)
       :M    (map-vals from-attr-value value)
@@ -69,45 +69,44 @@
    :item-count :items
    :creation-date-time :created})
 
-(defmulti  transform-table-kv (fn [k v m] k))
-(defmethod transform-table-kv :default [k v m]
+(defmulti  transform-table-kv (fn [m k v] k))
+(defmethod transform-table-kv :default [m k v]
   (assoc m k v))
 
-(defmethod transform-table-kv :attribute-definitions [k v m]
-  (assoc m k (into {} (map ->attr-def v))))
+(defmulti-dispatch transform-table-kv
+  (map-vals
+   (fn [handler]
+     (fn [m k v] (assoc m k (handler v))))
+   {:attribute-definitions #(into {} (map ->attr-def %))
+    :key-schema ->key-schema
+    :provisioned-throughput ->throughput
+    :creation-date-time #(Math/round ^Double (* 1000 %))}))
 
-(defmethod transform-table-kv :key-schema [k v m]
-  (assoc m k (->key-schema v)))
-
-(defmethod transform-table-kv :provisioned-throughput [k v m]
-  (assoc m k (->throughput v)))
-
-(defmethod transform-table-kv :global-secondary-indexes [k v m]
+(defmethod transform-table-kv :global-secondary-indexes [m k v]
   (update-in m [:indexes :global] into (map ->global-index v)))
 
-(defmethod transform-table-kv :local-secondary-indexes [k v m]
-  ;; These are a subset of global indexes
+(defmethod transform-table-kv :local-secondary-indexes [m k v]
   (update-in m [:indexes :local] into (map ->local-index v)))
 
-(defmethod transform-table-kv :creation-date-time [k v m]
-  (assoc m k (Math/round ^Double (* 1000 v))))
+(defmulti  transform-response-kv
+  (fn [m k v target]
+    (keyword "hildebrand.response-key" (name k))))
+(defmethod transform-response-kv :default [m k v _]
+  (assoc m (keyword (name k)) v))
 
-(defn ->table-description [m]
+(derive :hildebrand.response-key/table :hildebrand.response-key/table-description)
+
+(defmethod transform-response-kv
+  :hildebrand.response-key/table-description [m k v _]
   (set/rename-keys
    (reduce
     (fn [acc [k v]]
-      (transform-table-kv k v acc))
-    nil m)
+      (transform-table-kv acc k v))
+    nil v)
    table-description-renames))
 
-(defmulti  transform-response-kv (fn [k v m target] k))
-(defmethod transform-response-kv :default [k v m _] (assoc m k v))
-(defmethod transform-response-kv :table-description [k v m _]
-  (->table-description v))
-(defmethod transform-response-kv :table [k v m _]
-  (->table-description v))
-
-(defmethod transform-response-kv :consumed-capacity [k v m _]
+(defmethod transform-response-kv
+  :hildebrand.response-key/consumed-capacity [m k v _]
   (assoc m k (walk/prewalk-replace
               {:capacity-units :capacity
                :table-name     :table}
@@ -115,33 +114,33 @@
 
 (def ->item (partial map-vals from-attr-value))
 
-(defmethod transform-response-kv :item [k v m _]
-  (assoc m k (->item v)))
+(derive :hildebrand.response-key/items      :hildebrand.response-key/item)
+(derive :hildebrand.response-key/attributes :hildebrand.response-key/item)
 
-(defmethod transform-response-kv :items [k v m _]
-  (assoc m k (map ->item v)))
+(defmethod transform-response-kv :hildebrand.response-key/item [m k v _]
+  (assoc m k (if (map? v) (->item v) (map ->item v))))
 
-(defmethod transform-response-kv :attributes [k v m _]
-  (assoc m k (->item v)))
-
-(defmulti  restructure-response* (fn [target m] target))
+(defmulti  restructure-response*
+  (fn [target m] (keyword "hildebrand.response" (name target))))
 (defmethod restructure-response* :default [_ m] m)
-(defmethod restructure-response* :get-item [_ {:keys [item] :as m}]
-  ;; If anything except the item appears in the response (e.g. capacity, etc.)
-  ;; then default to the empty map so we can associate metadata with it.
-  ;; It's not ideal, but I'm not sure what is.
-  (let [m (not-empty (dissoc m :item))]
-    (if (and m item)
-      (with-meta item m)
-      item)))
 
-(defmethod restructure-response* :list-tables [_ {:keys [tables end-table]}]
+(derive :hildebrand.response/put-item    :hildebrand.response/get-item)
+(derive :hildebrand.response/update-item :hildebrand.response/get-item)
+(derive :hildebrand.response/delete-item :hildebrand.response/get-item)
+
+(defmethod restructure-response* :hildebrand.response/get-item
+  [_ {:keys [item] :as m}]
+  (when item
+    (with-meta item (dissoc m :item))))
+
+(defmethod restructure-response* :hildebrand.response/list-tables
+  [_ {:keys [tables end-table]}]
   (with-meta tables {:start-table end-table}))
 
-(defmethod restructure-response* :query [_ {:keys [items] :as m}]
-  (with-meta (or items []) (dissoc m :items)))
+(derive :hildebrand.response/scan :hildebrand.response/query)
 
-(defmethod restructure-response* :scan [_ {:keys [items] :as m}]
+(defmethod restructure-response* :hildebrand.response/query
+  [_ {:keys [items] :as m}]
   (with-meta (or items []) (dissoc m :items)))
 
 (defn error [type message & [data]]
@@ -154,7 +153,8 @@
            {:unprocessed unprocessed
             :result result})))
 
-(defmethod restructure-response* :batch-get-item [_ {:keys [unprocessed responses] :as m}]
+(defmethod restructure-response* :hildebrand.response/batch-get-item
+  [_ {:keys [unprocessed responses] :as m}]
   (let [result (with-meta
                  (for-map [[t items] responses]
                    t (map ->item items))
@@ -162,7 +162,8 @@
     (or (maybe-unprocessed-error unprocessed result)
         result)))
 
-(defmethod restructure-response* :batch-write-item [_ {:keys [unprocessed] :as resp}]
+(defmethod restructure-response* :hildebrand.response/batch-write-item
+  [_ {:keys [unprocessed] :as resp}]
   (or (maybe-unprocessed-error unprocessed)
       (with-meta {} resp)))
 
@@ -175,16 +176,11 @@
    :last-evaluated-key        :end-key
    :unprocessed-items :unprocessed})
 
-(def structure-groups
-  {:put-item    :get-item
-   :update-item :get-item
-   :delete-item :get-item})
-
 (defn restructure-response [target m]
   (let [m (reduce
            (fn [acc [k v]]
-             (transform-response-kv k v acc target))
+             (transform-response-kv acc k v target))
            nil m)]
     (restructure-response*
-     (structure-groups target target)
+     target
      (set/rename-keys m renames))))
