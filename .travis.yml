@@ -1,8 +1,10 @@
 language: clojure
 lein: lein2
-script: lein2 test hildebrand.test.core hildebrand.test.page hildebrand.test.internal.request hildebrand.test.internal.response
-
+script: lein2 test hildebrand.test.core hildebrand.test.page hildebrand.test.internal.request
+  hildebrand.test.internal.response
 env:
     global:
-        - secure: "IGqRxG4fBSTlYP0yGtpOVWHem3O5GNqutrD5T6fDD/0vVx45nO4ywpjGQIuWMBi/0yetQ3OpYWMvGEHBhmiBOLj8RhTQ9UqIr5eKTWitWUQFsWD8HoL4isUAcUzssvdpmrmAyiSDhdmGiFibUpF9dNBFaZz4exDX1h4lgihE5ds="
-        - secure: "TdiRDWIjneCjsn75Xl4d+Ickdm6juNTiLFztofMiG1eQtKrhep8WjORe9prHuXM0IWbPOF+l0Pe6gWZZq/ggjby3xJfYH6HtfukstpU3blIYBzB/GUqcCu+iszRo0xsU6PrhtKPskFa265lSCprR4rrdz859vinc9HNVYWoakpo="
+        secure: "Xt7aKxjrquevFJ8kYGjAWdeD+Ogdf/0zbQYx/nWV0Rm5lsHk4s7K4qe6gIm7MUlp4dLQlXZHobK+9KVKxgbecL+uVU6M2fgl0X1F/yY15EhcxOCuQbpaE156G0Z1p66Wo0swRW9F5GBsSu38xCceVeTyyGLNBM3eDfuUbIs5Yfg="
+        secure: "UN5LxS50WOf37+ETmD/ps2noO+KsLj6jKVAK7oOadw+s7LgjTzulZznDJhjx5DplkcvNIyCHhpx9Yr9hotXikXi/OEQ6VNQZ/mgV1biyCKHQgPFrYHKyB910Udb0Ry0k+8C46NL0IZTD+0AL6X8MNo4Bj9v8Q2WyB70MP5kmxpc="
+
+ 		
