@@ -15,6 +15,18 @@
    extra
    (assoc batch-opts :limit limit :start-key-name :exclusive-start-stream-arn)))
 
+(defn get-shards! [creds stream-arn {:keys [limit] :as extra} & [batch-opts]]
+  (paginate!
+   (fn [& args]
+     (go-catching
+       (let [{:keys [shards] :as m}
+             (<? (apply streams/describe-stream! creds stream-arn args))]
+         (with-meta
+           (or shards [])
+           m))))
+   extra
+   (assoc batch-opts :limit limit :start-key-name :exclusive-start-shard-id)))
+
 (defn get-records! [creds stream-arn shard-id iterator-type
                     & [{:keys [limit chan sequence-number]}]]
   (assert (or limit chan)

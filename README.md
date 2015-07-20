@@ -8,7 +8,7 @@ Built on top of [eulalie](https://github.com/nervous-systems/eulalie), it works
 with both Clojure and Clojurescript/Node.
 
 Advanced Dynamo features, including the [DynamoDB Streams
-API](http://aws.amazon.com/dynamodb/faqs/#triggers) are fully implemented.
+API](http://aws.amazon.com/dynamodb/faqs/#streams) are fully implemented.
 
 ## Documentation
 

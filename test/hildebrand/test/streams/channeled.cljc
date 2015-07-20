@@ -28,7 +28,6 @@
                              creds
                              {:limit 1})))))))))
 
-
 (deftest get-records
   (let [item {:user-id "moea" :game-title "Super Mario"}]
     (with-local-dynamo!

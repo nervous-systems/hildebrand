@@ -22,9 +22,12 @@
 
 (defmethod response/restructure-response* :hildebrand.response/describe-stream
   [_ {{:keys [key-schema shards] :as m} :stream-description}]
-  (assoc m
-         :key-schema (response/->key-schema key-schema)
-         :shards     (map ->shard shards)))
+  (with-meta
+    (assoc m
+           :key-schema (response/->key-schema key-schema)
+           :shards     (map ->shard shards))
+    {:exclusive-start-shard-id
+     (:last-evaluated-shard-id m)}))
 
 (defmethod response/restructure-response* :hildebrand.response/get-shard-iterator
   [_ {:keys [shard-iterator]}]
