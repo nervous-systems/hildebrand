@@ -11,7 +11,8 @@
   #? (:cljs (:require-macros [glossop.macros :refer [go-catching <?]]
                              [cljs.core.async.macros :refer [alt!]])))
 
-(defn paginate! [f input {:keys [limit maximum chan]}]
+(defn paginate! [f input {:keys [limit maximum chan start-key-name]
+                          :or {start-key-name :start-key}}]
   (assert (or limit chan)
           "Please supply either a page-size (limit) or output channel")
   (let [chan (or chan (async/chan limit))]
@@ -19,31 +20,36 @@
       (try
         (loop [start-key nil n 0]
           (let [items (<? (f (cond-> input start-key
-                                     (assoc :start-key start-key))))
+                                     (assoc start-key-name start-key))))
                 n (+ n (count items))
-                {:keys [end-key]} (meta items)]
+                {start-key start-key-name} (meta items)]
             (if (and (<? (onto-chan? chan items))
-                     end-key
+                     start-key
                      (or (not maximum) (< n maximum)))
-              (recur end-key n)
+              (recur start-key n)
               (async/close! chan))))
         (catch #? (:clj Exception :cljs js/Error) e
           (async/>! chan e)
           (async/close! chan))))
     chan))
 
-(defn query! [creds table where {:keys [limit] :as extra} & [{:keys [chan maximum]}]]
+(defn query! [creds table where {:keys [limit] :as extra} & [batch-opts]]
   (paginate!
    (partial h/query! creds table where)
    extra
-   {:limit limit :maximum maximum :chan chan}))
+   (assoc batch-opts :limit limit)))
 
-(defn scan! [creds table {:keys [limit] :as extra} & [{:keys [chan maximum]}]]
+(defn scan! [creds table {:keys [limit] :as extra} & [batch-opts]]
   (paginate!
    (partial h/scan! creds table)
    extra
-   {:limit limit :maximum maximum :chan chan}))
+   (assoc batch-opts :limit limit)))
 
+(defn list-tables! [creds {:keys [limit] :as extra} & [batch-opts]]
+  (paginate!
+   (partial h/list-tables! creds)
+   extra
+   (assoc batch-opts :limit limit :start-key-name :start-table)))
 
 (defn- batch-send! [issue-fn batch error-chan]
   (go-catching

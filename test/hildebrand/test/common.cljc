@@ -1,6 +1,7 @@
 (ns hildebrand.test.common
   (:require [hildebrand.core :as h]
             [plumbing.core :refer [map-keys]]
+            [glossop.util]
             #?@ (:clj
                  [[glossop.core :refer [<? <?! go-catching]]
                   [clojure.core.async :as async]]
@@ -65,19 +66,20 @@
       :keys [:user-id :timestamp]
       :project [:include [:data]]}]
     :global
-    [create-global-index]}})
+    [create-global-index]}
+   :stream-specification
+   {:stream-enabled true
+    :stream-view-type :new-and-old-images}})
 
-;; The tests could just use one table.  This is only really a burden with the
-;; few tests which use Dynamo remotely (due to expectations about capacity
-;; consumption being returned, which doesn't happen with local Dynamo).  This is
-;; super slow remotely.
 (defn reset-tables! [creds tables]
   (go-catching
     (try
       (<? (glossop.util/into []
             (async/merge (for [{:keys [table]} tables]
                            (h/delete-table! creds table)))))
-      (catch #? (:clj Exception :cljs js/Error) _))
+      (catch #? (:clj Exception :cljs js/Error) e
+        (when (not= :resource-not-found (-> e ex-data :type))
+          (throw e))))
     (<? (glossop.util/into []
           (async/merge (for [{:keys [table]} tables]
                          (h/await-status! creds table nil)))))
@@ -100,15 +102,18 @@
            (<? (f creds))))
        (println "Warning: Skipping local test due to unset LOCAL_DYNAMO_URL")))))
 
+;; For now, this just assumes the tables exist
+
 (defn with-remote-dynamo!
   ([f] (with-remote-dynamo! default-tables f))
   ([tables+items f]
    (go-catching
      (if (not-empty (:secret-key creds))
        (let [tables (cond-> tables+items (map? tables+items) keys)]
-         (<? (reset-tables! creds tables))
          (if (map? tables+items)
            (<? (with-items! creds tables+items (partial f creds)))
            (<? (f creds))))
        (println "Warning: Skipping remote test due to unset AWS_SECRET_KEY")))))
 
+(defn greedy-paginate! [f & args]
+  (glossop.util/into [] (apply f args)))

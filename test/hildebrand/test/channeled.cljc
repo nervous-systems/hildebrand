@@ -1,26 +1,20 @@
 (ns hildebrand.test.channeled
-  (:require
-   [glossop.util]
-   #?@ (:clj
-        [[clojure.core.async :as async :refer [alt!]]
-         [glossop.core :refer [go-catching <?]]
-         [clojure.test :refer [is]]
-         [hildebrand.test.async :refer [deftest]]]
-        :cljs
-        [[cemerick.cljs.test]
-         [cljs.core.async :as async]])
-   [hildebrand.test.common :as test.common :refer
-    [create-table-indexed indexed-table with-local-dynamo!]]
-   [hildebrand.channeled :as channeled]
-   [hildebrand.core :as h])
+  (:require  #?@ (:clj
+                  [[clojure.core.async :as async :refer [alt!]]
+                   [glossop.core :refer [go-catching <?]]
+                   [clojure.test :refer [is]]
+                   [hildebrand.test.async :refer [deftest]]]
+                  :cljs
+                  [[cemerick.cljs.test]
+                   [cljs.core.async :as async]])
+             [hildebrand.test.common :as test.common :refer
+              [create-table-indexed indexed-table with-local-dynamo! greedy-paginate!]]
+             [hildebrand.channeled :as channeled]
+             [hildebrand.core :as h])
   #? (:cljs (:require-macros [glossop.macros :refer [<? go-catching]]
                              [hildebrand.test.async.macros :refer [deftest]]
                              [cljs.core.async.macros :refer [alt!]]
                              [cemerick.cljs.test :refer [is]])))
-
-
-(defn greedy-paginate! [f & args]
-  (glossop.util/into [] (apply f args)))
 
 (def greedy-query! (partial greedy-paginate! channeled/query!))
 
@@ -62,6 +56,15 @@
                           {:limit 1
                            :filter [:= [:user-id] "page-test"]}))))))))
 
+(deftest list-tables
+  (with-local-dynamo!
+    (fn [creds]
+      (go-catching
+        (is (< 1 (count
+                  (<? (greedy-paginate!
+                       channeled/list-tables!
+                       creds
+                       {:limit 1})))))))))
 
 ;; These are more examples than tests
 

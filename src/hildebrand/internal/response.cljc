@@ -133,8 +133,8 @@
     (with-meta item (dissoc m :item))))
 
 (defmethod restructure-response* :hildebrand.response/list-tables
-  [_ {:keys [tables end-table]}]
-  (with-meta tables {:start-table end-table}))
+  [_ {:keys [tables] :as m}]
+  (with-meta (or tables []) (dissoc m :tables)))
 
 (derive :hildebrand.response/scan :hildebrand.response/query)
 
@@ -171,8 +171,8 @@
    :attributes        :item
    :table-names       :tables
    :item-collection-metrics :metrics
-   :last-evaluated-table-name :end-table
-   :last-evaluated-key        :end-key
+   :last-evaluated-table-name :start-table
+   :last-evaluated-key        :start-key
    :unprocessed-items :unprocessed})
 
 (defn restructure-response [target m]

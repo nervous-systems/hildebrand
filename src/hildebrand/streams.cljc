@@ -1,16 +1,17 @@
 (ns hildebrand.streams
-  (:require [eulalie.support]
-            [eulalie.dynamo-streams]
-            [hildebrand.core :as hildebrand]
-            [hildebrand.internal.streams]
-            [hildebrand.internal :as i]
-            [hildebrand.internal.request :as request]
-            [hildebrand.internal.response :as response]
-            #?@ (:clj
+  (:require #?@ (:clj
                  [[glossop.core :refer [go-catching <? <?!]]
                   [clojure.core.async :as async]]
                  :cljs
-                 [[cljs.core.async :as async]]))
+                 [[cljs.core.async :as async]])
+            [clojure.set :as set]
+            [eulalie.dynamo-streams]
+            [eulalie.support]
+            [hildebrand.core :as hildebrand]
+            [hildebrand.internal :as i]
+            [hildebrand.internal.request :as request]
+            [hildebrand.internal.response :as response]
+            [hildebrand.internal.streams])
   #? (:cljs (:require-macros [glossop.macros :refer [go-catching <?]]
                              [hildebrand.streams :refer [defissuer]])))
 
@@ -22,14 +23,14 @@
          response/restructure-response
          ~doc)))
 
-(defissuer describe-stream    [stream-id])
+(defissuer describe-stream    [stream-arn])
 (defissuer get-records        [shard-iterator])
-(defissuer get-shard-iterator [stream-id shard-id shard-iterator-type])
+(defissuer get-shard-iterator [stream-arn shard-id shard-iterator-type])
 (defissuer list-streams       [])
 
-(defn latest-stream-id! [creds table & args]
+(defn latest-stream-arn! [creds table & args]
   (go-catching
-    (let [{:keys [latest-stream-id]}
-          (<? (apply hildebrand/describe-table! creds table args))]
-      latest-stream-id)))
-#? (:clj (def latest-stream-id!! (comp <?! latest-stream-id!)))
+    (-> (apply hildebrand/describe-table! creds table args)
+        <?
+        :latest-stream-arn)))
+#? (:clj (def latest-stream-arn!! (comp <?! latest-stream-arn!)))
