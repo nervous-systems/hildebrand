@@ -7,5 +7,6 @@ before_install:
 script: lein2 test hildebrand.test.core hildebrand.test.channeled hildebrand.test.internal.request hildebrand.test.streams hildebrand.test.streams.channeled hildebrand.test.internal.response
 env:
     global:
+        - LOCAL_DYNAMO_URL=http://localhost:8000
         - secure: "Xt7aKxjrquevFJ8kYGjAWdeD+Ogdf/0zbQYx/nWV0Rm5lsHk4s7K4qe6gIm7MUlp4dLQlXZHobK+9KVKxgbecL+uVU6M2fgl0X1F/yY15EhcxOCuQbpaE156G0Z1p66Wo0swRW9F5GBsSu38xCceVeTyyGLNBM3eDfuUbIs5Yfg="
         - secure: "UN5LxS50WOf37+ETmD/ps2noO+KsLj6jKVAK7oOadw+s7LgjTzulZznDJhjx5DplkcvNIyCHhpx9Yr9hotXikXi/OEQ6VNQZ/mgV1biyCKHQgPFrYHKyB910Udb0Ry0k+8C46NL0IZTD+0AL6X8MNo4Bj9v8Q2WyB70MP5kmxpc="
