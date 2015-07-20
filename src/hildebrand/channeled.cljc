@@ -85,7 +85,7 @@
                 (recur batch)))))))
     {:in-chan in-chan :error-chan error-chan}))
 
-(defn- batching-something [op-tag {:keys [creds table batch-opts]}]
+(defn- batching-something [op-tag creds table batch-opts]
   (batching-channel
    (assoc batch-opts
           :issue-fn
@@ -95,8 +95,8 @@
                              {table batch}
                              (grouped-map first second batch))})))))
 
-(defn batching-puts [creds & [{:keys [table batch-opts] :as arg}]]
-  (batching-something :put (assoc arg :creds creds)))
+(defn batching-puts [creds & [table batch-opts]]
+  (batching-something :put creds table batch-opts))
 
-(defn batching-deletes [creds & [{:keys [table batch-opts] :as arg}]]
-  (batching-something :delete (assoc arg :creds creds)))
+(defn batching-deletes [creds & [table batch-opts]]
+  (batching-something :delete creds table batch-opts))

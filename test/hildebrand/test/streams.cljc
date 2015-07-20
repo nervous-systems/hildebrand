@@ -34,3 +34,15 @@
         (let [stream (<? (describe-stream! creds))]
           (is (:stream-arn stream)))))))
 
+(deftest get-shard-iterator
+  (with-local-dynamo! [create-table-indexed]
+    (fn [creds]
+      (go-catching
+        (let [{stream-arn :stream-arn
+               [{:keys [shard-id]}] :shards} (<? (describe-stream! creds))]
+          (is (string?
+               (<? (streams/get-shard-iterator!
+                    creds
+                    stream-arn
+                    shard-id
+                    :trim-horizon)))))))))

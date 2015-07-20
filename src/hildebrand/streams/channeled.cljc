@@ -21,14 +21,12 @@
      (go-catching
        (let [{:keys [shards] :as m}
              (<? (apply streams/describe-stream! creds stream-arn args))]
-         (with-meta
-           (or shards [])
-           m))))
+         (map #(with-meta % m) shards))))
    extra
    (assoc batch-opts :limit limit :start-key-name :exclusive-start-shard-id)))
 
-(defn get-records! [creds stream-arn shard-id iterator-type
-                    & [{:keys [limit chan sequence-number]}]]
+(defn get-records! [creds stream-arn shard-id iterator-type {:keys [limit sequence-number]}
+                    & [{:keys [chan]}]]
   (assert (or limit chan)
           "Please supply either a page-size (limit) or output channel")
   (let [chan (or chan (async/chan limit))]

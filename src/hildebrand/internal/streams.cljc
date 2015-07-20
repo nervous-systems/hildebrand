@@ -22,12 +22,14 @@
 
 (defmethod response/restructure-response* :hildebrand.response/describe-stream
   [_ {{:keys [key-schema shards] :as m} :stream-description}]
-  (with-meta
-    (assoc m
-           :key-schema (response/->key-schema key-schema)
-           :shards     (map ->shard shards))
-    {:exclusive-start-shard-id
-     (:last-evaluated-shard-id m)}))
+  (-> m
+      (assoc
+       :key-schema (response/->key-schema key-schema)
+       :shards     (map ->shard shards))
+      (update :creation-request-date-time #(Math/round ^Double (* 1000 %)))
+      (with-meta
+        {:exclusive-start-shard-id
+         (:last-evaluated-shard-id m)})))
 
 (defmethod response/restructure-response* :hildebrand.response/get-shard-iterator
   [_ {:keys [shard-iterator]}]

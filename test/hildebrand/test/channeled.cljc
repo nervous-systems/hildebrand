@@ -75,11 +75,11 @@
         (let [{:keys [error-chan]}
               (channeled/batching-puts
                creds
-               {:table indexed-table
-                :batch-opts {:in-chan
-                             (async/to-chan
-                              [{:user-id "batching-puts" :game-title "1"}
-                               {:user-id "batching-puts" :game-title "2"}])}})]
+               indexed-table
+               {:in-chan
+                (async/to-chan
+                 [{:user-id "batching-puts" :game-title "1"}
+                  {:user-id "batching-puts" :game-title "2"}])})]
           (alt!
             (async/timeout 1000) (is false "Timeout!")
             error-chan
