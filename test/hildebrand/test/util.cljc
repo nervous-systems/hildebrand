@@ -20,6 +20,7 @@
               (try
                 (<? (do ~@forms))
                 (catch js/Error e#
+                  (.error js/console e# (aget e# "stack"))
                   (cljs.test/is (nil? e#))))
               (done#))))
         `(test/deftest ~t-name

@@ -9,9 +9,10 @@
             [glossop.util]
             [glossop.core #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
             #? (:clj
-                [clojure.core.async :as async]
+                [clojure.core.async :as async :refer [alt!]]
                 :cljs
-                [cljs.core.async :as async])))
+                [cljs.core.async :as async]))
+  #? (:cljs (:require-macros [cljs.core.async.macros :refer [alt!]])))
 
 (deftest list-streams
   (with-local-dynamo!
@@ -33,10 +34,14 @@
                 stream     (<? (streams/describe-stream! creds stream-arn))
                 {:keys [shard-id]} (last (:shards stream))
                 record-chan (channeled/get-records!
-                             creds stream-arn shard-id :trim-horizon {:limit 1})
-                results     (<? (->> record-chan
-                                     (async/take 2)
-                                     (glossop.util/into [])))]
-            (is (= results
-                   [[:insert item]
-                    [:modify item (assoc item :update "yeah")]]))))))))
+                             creds stream-arn shard-id :trim-horizon {:limit 1})]
+            (alt! (async/timeout 1000) (is nil "Timeout")
+                  (->> record-chan
+                       (async/take 2)
+                       (glossop.util/into []))
+                  ([results]
+                   (async/close! record-chan)
+                   (glossop.core/throw-err results)
+                   (is (= results
+                          [[:insert item]
+                           [:modify item (assoc item :update "yeah")]]))))))))))

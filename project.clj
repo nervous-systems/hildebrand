@@ -29,12 +29,19 @@
                         :source-map true}}
             {:id "test-none"
              :source-paths ["src" "test"]
-             :notify-command {"node" "target/test-none/hildebrand.js"}
-             :compiler {:output-to "target/test-none/eulalie-test.js"
+             :notify-command ["node" "target/test-none/hildebrand-test.js"]
+             :compiler {:output-to "target/test-none/hildebrand-test.js"
                         :output-dir "target/test-none"
                         :target :nodejs
                         :optimizations :none
-                        :main "hildebrand.test.runner"}}]}
+                        :main "hildebrand.test.runner"}}
+            {:id "test-advanced"
+             :source-paths ["src" "test"]
+             :notify-command ["node" "target/test-advanced/hildebrand-test.js"]
+             :compiler {:output-to "target/test-advanced/hildebrand-test.js"
+                        :output-dir "target/test-advanced"
+                        :target :nodejs
+                        :optimizations :advanced}}]}
   :profiles {:dev
              {:repl-options
               {:nrepl-middleware

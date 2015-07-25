@@ -12,7 +12,8 @@
             [hildebrand.internal :as i]
             [hildebrand.internal.request :as request]
             [hildebrand.internal.response :as response]
-            [hildebrand.internal.streams]))
+            [hildebrand.internal.streams])
+  #? (:cljs (:require-macros [hildebrand.streams :refer [defissuer]])))
 
 #? (:clj
     (defmacro defissuer [target-name args & [doc]]
