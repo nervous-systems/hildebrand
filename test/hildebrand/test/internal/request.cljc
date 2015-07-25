@@ -1,12 +1,10 @@
 (ns hildebrand.test.internal.request
-  (:require #?
-            (:clj
+  (:require #? (:clj
                 [clojure.test :refer [deftest is]]
                 :cljs
-                [cemerick.cljs.test])
+                [cljs.test :refer-macros [deftest is]])
             [clojure.walk :as walk]
-            [hildebrand.internal.request :refer [restructure-request]])
-  #? (:cljs (:require-macros [cemerick.cljs.test :refer [deftest is]])))
+            [hildebrand.internal.request :refer [restructure-request]]))
 
 (def gs-index-out
   {:index-name :users-by-id

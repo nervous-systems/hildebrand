@@ -1,9 +1,10 @@
 (ns hildebrand.streams
-  (:require #?@ (:clj
-                 [[glossop.core :refer [go-catching <? <?!]]
-                  [clojure.core.async :as async]]
-                 :cljs
-                 [[cljs.core.async :as async]])
+  (:require [glossop.core :as g
+             #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
+            #? (:clj
+                [clojure.core.async :as async]
+                :cljs
+                [cljs.core.async :as async])
             [clojure.set :as set]
             [eulalie.dynamo-streams]
             [eulalie.support]
@@ -11,9 +12,7 @@
             [hildebrand.internal :as i]
             [hildebrand.internal.request :as request]
             [hildebrand.internal.response :as response]
-            [hildebrand.internal.streams])
-  #? (:cljs (:require-macros [glossop.macros :refer [go-catching <?]]
-                             [hildebrand.streams :refer [defissuer]])))
+            [hildebrand.internal.streams]))
 
 #? (:clj
     (defmacro defissuer [target-name args & [doc]]
@@ -33,4 +32,4 @@
     (-> (apply hildebrand/describe-table! creds table args)
         <?
         :latest-stream-arn)))
-#? (:clj (def latest-stream-arn!! (comp <?! latest-stream-arn!)))
+#? (:clj (def latest-stream-arn!! (comp g/<?! latest-stream-arn!)))

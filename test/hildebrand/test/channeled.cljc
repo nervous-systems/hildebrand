@@ -1,20 +1,16 @@
 (ns hildebrand.test.channeled
-  (:require  #?@ (:clj
-                  [[clojure.core.async :as async :refer [alt!]]
-                   [glossop.core :refer [go-catching <?]]
-                   [clojure.test :refer [is]]
-                   [hildebrand.test.async :refer [deftest]]]
-                  :cljs
-                  [[cemerick.cljs.test]
-                   [cljs.core.async :as async]])
-             [hildebrand.test.common :as test.common :refer
-              [create-table-indexed indexed-table with-local-dynamo! greedy-paginate!]]
-             [hildebrand.channeled :as channeled]
-             [hildebrand.core :as h])
-  #? (:cljs (:require-macros [glossop.macros :refer [<? go-catching]]
-                             [hildebrand.test.async.macros :refer [deftest]]
-                             [cljs.core.async.macros :refer [alt!]]
-                             [cemerick.cljs.test :refer [is]])))
+  (:require
+   #? (:clj
+       [clojure.core.async :as async :refer [alt!]]
+       :cljs
+       [cljs.core.async :as async])
+   [glossop.core #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
+   [hildebrand.test.common :as test.common :refer
+    [create-table-indexed indexed-table with-local-dynamo! greedy-paginate!]]
+   [hildebrand.test.util #? (:clj :refer :cljs :refer-macros) [deftest is]]
+   [hildebrand.channeled :as channeled]
+   [hildebrand.core :as h])
+  #? (:cljs (:require-macros [cljs.core.async.macros :refer [alt!]])))
 
 (def greedy-query! (partial greedy-paginate! channeled/query!))
 

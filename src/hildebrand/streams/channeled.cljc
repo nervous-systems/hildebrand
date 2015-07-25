@@ -2,12 +2,11 @@
   (:require [hildebrand.streams :as streams]
             [hildebrand.channeled :refer [paginate!]]
             [glossop.util :refer [onto-chan?]]
-            #?@ (:clj
-                 [[glossop.core :refer [go-catching <?]]
-                  [clojure.core.async :as async]]
-                 :cljs
-                 [[cljs.core.async :as async]]))
-  #? (:cljs (:require-macros [glossop.macros :refer [go-catching <?]])))
+            #? (:clj
+                [clojure.core.async :as async]
+                :cljs
+                [cljs.core.async :as async])
+            [glossop.core #? (:clj :refer :cljs :refer-macros) [go-catching <?]]))
 
 (defn list-streams! [creds {:keys [limit] :as extra} & [batch-opts]]
   (paginate!

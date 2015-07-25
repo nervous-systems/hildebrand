@@ -2,24 +2,16 @@
   (:require [clojure.walk :as walk]
             [hildebrand.core :as h]
             [glossop.util]
+            [glossop.core #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
             [hildebrand.test.common :as test.common
              :refer [table create-table-default creds
                      with-local-dynamo! with-remote-dynamo!]]
-            #?@ (:clj
-                 [[clojure.test :refer [is]]
-                  [hildebrand.test.async :refer [deftest]]
-                  [glossop.core :refer [go-catching <?]]
-                  [clojure.core.async :as async]]
-                 :cljs
-                 [[cemerick.cljs.test]
-                  [cljs.core.async :as async]]))
+            [hildebrand.test.util
+             #? (:clj :refer :cljs :refer-macros) [deftest is]])
   #? (:clj
       (:import (clojure.lang ExceptionInfo))
       :cljs
-      (:require-macros [glossop.macros :refer [<? go-catching]]
-                       [hildebrand.test.async.macros :refer [deftest]]
-                       [cemerick.cljs.test :refer [is]]
-                       [hildebrand.test.core :refer [update-test]])))
+      (:require-macros [hildebrand.test.core :refer [update-test]])))
 
 (defn ba->seq [x]
   #? (:clj
@@ -135,10 +127,10 @@
         (if (:ns &env)
           `(with-local-dynamo! ~{create-table-default [keyed-item]}
              (fn [creds#]
-               (glossop.macros/go-catching
-                 (cemerick.cljs.test/is
+               (go-catching
+                 (is
                   (= ~exp
-                     (glossop.macros/<?
+                     (<?
                       (h/update-item!
                        creds# ~table ~item ~updates {:return :all-new})))))))
           `(with-local-dynamo! ~{create-table-default [keyed-item]}

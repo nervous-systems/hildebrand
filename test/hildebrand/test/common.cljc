@@ -1,26 +1,19 @@
 (ns hildebrand.test.common
   (:require [hildebrand.core :as h]
+            [eulalie.util :refer [env!]]
             [plumbing.core :refer [map-keys]]
             [glossop.util]
-            #?@ (:clj
-                 [[glossop.core :refer [<? <?! go-catching]]
-                  [clojure.core.async :as async]]
-                 :cljs
-                 [[cljs.core.async :as async]]))
-  #? (:cljs
-      (:require-macros [glossop.macros :refer [go-catching <?]])))
-
-(defn env [s & [default]]
-  #? (:clj
-      (get (System/getenv) s default)
-      :cljs
-      (or (aget js/process "env" s) default)))
+            [glossop.core #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
+            #? (:clj
+                [clojure.core.async :as async]
+                :cljs
+                [cljs.core.async :as async])))
 
 (def creds
-  {:access-key (env "AWS_ACCESS_KEY")
-   :secret-key (env "AWS_SECRET_KEY")})
+  {:access-key (env! "AWS_ACCESS_KEY")
+   :secret-key (env! "AWS_SECRET_KEY")})
 
-(def local-dynamo-url (env "LOCAL_DYNAMO_URL"))
+(def local-dynamo-url (env! "LOCAL_DYNAMO_URL"))
 
 (defn with-items!
   ([specs f]

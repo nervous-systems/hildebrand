@@ -2,7 +2,8 @@
   (:require [eulalie.support :refer [translate-error-type]]
             [eulalie.dynamo]
             [hildebrand.internal.request]
-            [hildebrand.internal.response]))
+            [hildebrand.internal.response])
+  #? (:cljs (:require-macros [hildebrand.internal])))
 
 (def aws-error->hildebrand
   {:resource-not-found-exception :resource-not-found

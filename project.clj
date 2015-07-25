@@ -9,8 +9,7 @@
                 *print-meta* true}
   :source-paths ["src"]
   :plugins [[lein-cljsbuild "1.0.6"]
-            [lein-npm "0.5.0"]
-            [com.cemerick/clojurescript.test "0.3.3"]]
+            [lein-npm "0.5.0"]]
   :dependencies
   [[org.clojure/clojure        "1.7.0"]
    [org.clojure/clojurescript  "0.0-3308"]
@@ -28,16 +27,14 @@
                         :hashbang false
                         :optimizations :none
                         :source-map true}}
-            {:id "test"
+            {:id "test-none"
              :source-paths ["src" "test"]
-             :compiler {:output-to "target/js-test/test.js"
-                        :output-dir "target/js-test"
+             :notify-command {"node" "target/test-none/hildebrand.js"}
+             :compiler {:output-to "target/test-none/eulalie-test.js"
+                        :output-dir "target/test-none"
                         :target :nodejs
-                        :hashbang false
-                        :source-map true
-                        :optimizations :none}}]
-   :test-commands {"node" ["node" "runner-none.js" "target/js-test"
-                           "target/js-test/test.js"]}}
+                        :optimizations :none
+                        :main "hildebrand.test.runner"}}]}
   :profiles {:dev
              {:repl-options
               {:nrepl-middleware

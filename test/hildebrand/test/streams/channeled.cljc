@@ -5,19 +5,13 @@
             [hildebrand.test.common :as test.common
              :refer [create-table-indexed indexed-table
                      with-local-dynamo! greedy-paginate!]]
+            [hildebrand.test.util #? (:clj :refer :cljs :refer-macros) [deftest is]]
             [glossop.util]
-            #?@ (:clj
-                 [[clojure.test :refer [is]]
-                  [hildebrand.test.async :refer [deftest]]
-                  [glossop.core :refer [go-catching <?]]
-                  [clojure.core.async :as async]]
-                 :cljs
-                 [[cemerick.cljs.test]
-                  [cljs.core.async :as async]]))
-  #? (:cljs
-      (:require-macros [glossop.macros :refer [<? go-catching]]
-                       [hildebrand.test.async.macros :refer [deftest]]
-                       [cemerick.cljs.test :refer [is]])))
+            [glossop.core #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
+            #? (:clj
+                [clojure.core.async :as async]
+                :cljs
+                [cljs.core.async :as async])))
 
 (deftest list-streams
   (with-local-dynamo!

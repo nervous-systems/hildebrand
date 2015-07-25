@@ -1,21 +1,17 @@
 (ns hildebrand.core
   (:require
-   [eulalie.support]
    [hildebrand.internal]
    [hildebrand.internal.request]
    [hildebrand.internal.response]
+   [hildebrand.internal #? (:clj :refer :cljs :refer-macros) [defissuer]]
+   [glossop.core :as g
+    #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
    #?@ (:clj
-        [[hildebrand.internal :refer [defissuer]]
-         [glossop.core :refer [<? <?! go-catching]]
-         [clojure.core.async :as async]]
+        [[clojure.core.async :as async]]
         :cljs
         [[cljs.core.async :as async]
-         [plumbing.map]
          [cljs.reader :as reader]
-         [hildebrand.internal.expr :as expr]]))
-  #? (:cljs
-      (:require-macros [hildebrand.internal :refer [defissuer]]
-                       [glossop.macros :refer [<? go-catching]])))
+         [hildebrand.internal.expr :as expr]])))
 
 #? (:cljs
     (do
@@ -70,7 +66,7 @@ delete." )
           (when (not= :resource-not-found (-> e ex-data :type))
             (throw e))))))
 
-#? (:clj (def table-status!! (comp <?! table-status!)))
+#? (:clj (def table-status!! (comp g/<?! table-status!)))
 
 ;; Should probably do something smarter
 (defn await-status! [creds table target-status & [{:keys [timeout] :or {timeout 250}}]]
@@ -83,7 +79,7 @@ delete." )
                       (<? (async/timeout timeout))
                       (recur)))))))
 
-#? (:clj (def await-status!! (comp <?! await-status!)))
+#? (:clj (def await-status!! (comp g/<?! await-status!)))
 
 (defn ensure-table! [creds {:keys [table] :as create}]
   (go-catching
@@ -93,7 +89,7 @@ delete." )
       (when-not (= :active status)
         (<? (await-status! creds table :active))))))
 
-#? (:clj (def ensure-table!! (comp <?! ensure-table!)))
+#? (:clj (def ensure-table!! (comp g/<?! ensure-table!)))
 
 (defn scan-count! [creds table & [extra]]
   (go-catching
@@ -102,7 +98,7 @@ delete." )
         meta
         :count)))
 
-#? (:clj (def scan-count!! (comp <?! scan-count!)))
+#? (:clj (def scan-count!! (comp g/<?! scan-count!)))
 
 (defn query-count! [creds table where & [extra]]
   (go-catching
@@ -111,4 +107,4 @@ delete." )
         meta
         :count)))
 
-#? (:clj (def query-count!! (comp <?! query-count!)))
+#? (:clj (def query-count!! (comp g/<?! query-count!)))

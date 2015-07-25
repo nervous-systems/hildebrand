@@ -3,13 +3,12 @@
             [glossop.util :refer [onto-chan?]]
             [eulalie.support]
             [plumbing.core :refer [grouped-map]]
-            #?@ (:clj
-                 [[glossop.core :refer [go-catching <?]]
-                  [clojure.core.async :as async :refer [alt!]]]
-                 :cljs
-                 [[cljs.core.async :as async]]))
-  #? (:cljs (:require-macros [glossop.macros :refer [go-catching <?]]
-                             [cljs.core.async.macros :refer [alt!]])))
+            [glossop.core #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
+            #? (:clj
+                [clojure.core.async :as async :refer [alt!]]
+                :cljs
+                [cljs.core.async :as async]))
+  #? (:cljs (:require-macros [cljs.core.async.macros :refer [alt!]])))
 
 (defn paginate! [f input {:keys [limit maximum chan start-key-name]
                           :or {start-key-name :start-key}}]

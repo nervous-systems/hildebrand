@@ -1,17 +1,9 @@
 (ns hildebrand.test.streams
   (:require [hildebrand.streams :as streams]
+            [glossop.core #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
             [hildebrand.test.common :as test.common
              :refer [create-table-indexed indexed-table with-local-dynamo!]]
-            #?@ (:clj
-                 [[clojure.test :refer [is]]
-                  [hildebrand.test.async :refer [deftest]]
-                  [glossop.core :refer [go-catching <?]]]
-                 :cljs
-                 [[cemerick.cljs.test]]))
-  #? (:cljs
-      (:require-macros [glossop.macros :refer [<? go-catching]]
-                       [hildebrand.test.async.macros :refer [deftest]]
-                       [cemerick.cljs.test :refer [is]])))
+            [hildebrand.test.util #? (:clj :refer :cljs :refer-macros) [deftest is]]))
 
 (deftest list-streams
   (with-local-dynamo! [create-table-indexed]
