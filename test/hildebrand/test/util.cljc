@@ -1,7 +1,5 @@
 (ns hildebrand.test.util
-  (:require [hildebrand.core :as h]
-            [glossop.util]
-            [glossop.core :as g
+  (:require [glossop.core :as g
              #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
             #?@ (:clj
                  [[clojure.test :as test]

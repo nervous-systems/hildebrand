@@ -10,8 +10,8 @@
                 [cljs.core.async :as async]))
   #? (:cljs (:require-macros [cljs.core.async.macros :refer [alt!]])))
 
-(defn paginate! [f input {:keys [limit maximum chan start-key-name]
-                          :or {start-key-name :start-key}}]
+(defn paginate! [f input {:keys [limit maximum chan start-key-name close?]
+                          :or {start-key-name :start-key close? true}}]
   (assert (or limit chan)
           "Please supply either a page-size (limit) or output channel")
   (let [chan (or chan (async/chan limit))]
@@ -26,10 +26,12 @@
                      start-key
                      (or (not maximum) (< n maximum)))
               (recur start-key n)
-              (async/close! chan))))
+              (when close?
+                (async/close! chan)))))
         (catch #? (:clj Exception :cljs js/Error) e
           (async/>! chan e)
-          (async/close! chan))))
+          (when close?
+            (async/close! chan)))))
     chan))
 
 (defn query! [creds table where {:keys [limit] :as extra} & [batch-opts]]
@@ -57,15 +59,16 @@
       (catch #? (:clj Exception :cljs js/Error) e
         (async/>! error-chan e)))))
 
-(defn- batch-cleanup! [issue-fn batch error-chan]
+(defn- batch-cleanup! [issue-fn batch error-chan close?]
   (go-catching
     (when (not-empty batch)
       (<? (batch-send! issue-fn batch error-chan)))
-    (async/close! error-chan)))
+    (when close?
+      (async/close! error-chan))))
 
 (defn batching-channel
-  [{:keys [issue-fn period-ms threshold in-chan error-chan timeout-fn]
-    :or {period-ms 200 threshold 25 timeout-fn async/timeout}}]
+  [{:keys [issue-fn period-ms threshold in-chan error-chan timeout-fn close?]
+    :or {period-ms 200 threshold 25 timeout-fn async/timeout close? true}}]
   (let [in-chan    (or in-chan (async/chan))
         error-chan (or error-chan (async/chan))]
     (go-catching
@@ -76,7 +79,7 @@
                       in-chan ([v] v))
                     (<? in-chan))]
           (if (nil? msg)
-            (<? (batch-cleanup! issue-fn batch error-chan))
+            (<? (batch-cleanup! issue-fn batch error-chan close?))
             (let [batch (cond-> batch (not= msg ::timeout) (conj msg))]
               (if (or (= msg ::timeout) (= threshold (count batch)))
                 (do (<? (batch-send! issue-fn batch error-chan))

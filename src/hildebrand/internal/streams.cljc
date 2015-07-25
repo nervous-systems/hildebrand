@@ -13,12 +13,13 @@
         (dissoc :streams)
         (set/rename-keys {:last-evaluated-stream-arn
                           :exclusive-start-stream-arn}))))
-(defn ->shard [m]
-  (update m :sequence-number-range
-          (fn [{start :starting-sequence-number
-                end   :ending-sequence-number}]
-            [(some-> start string->number)
-             (some-> end   string->number)])))
+
+(defn ->shard [{{start :starting-sequence-number
+                 end   :ending-sequence-number} :sequence-number-range :as m}]
+  (assoc m
+         :sequence-number-range [(some-> start string->number)
+                                 (some-> end   string->number)]
+         :open (not end)))
 
 (defmethod response/restructure-response* :hildebrand.response/describe-stream
   [_ {{:keys [key-schema shards] :as m} :stream-description}]

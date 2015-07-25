@@ -6,6 +6,7 @@
             [hildebrand.test.common :as test.common
              :refer [table create-table-default creds
                      with-local-dynamo! with-remote-dynamo!]]
+            [#? (:clj clojure.core.async :cljs cljs.core.async) :as async]
             [hildebrand.test.util
              #? (:clj :refer :cljs :refer-macros) [deftest is]])
   #? (:clj
@@ -56,7 +57,10 @@
     (fn [creds]
       (go-catching
         (is (empty? (<? (h/put-item! creds table (assoc item :age 33)))))
-        (is (= 33 (:age (<? (h/get-item! creds table item {:consistent true})))))))))
+        (is (= 33 (<? (h/get-item!
+                       creds table item
+                       {:consistent true}
+                       {:chan (async/chan 1 (map :age))}))))))))
 
 (deftest put+conditional
   (with-local-dynamo! {create-table-default [item]}
@@ -81,7 +85,8 @@
     (fn [creds]
       (go-catching
         (<? (h/put-item! creds table item {:capacity :total}))
-        (let [item (<? (h/put-item! creds table item {:capacity :total :return :all-old}))]
+        (let [item (<? (h/put-item! creds table item
+                                    {:capacity :total :return :all-old}))]
           (is (= table (-> item meta :capacity :table))))))))
 
 (deftest delete
@@ -96,14 +101,16 @@
       (go-catching
         (is (= table
                (->
-                (h/delete-item! creds table item {:capacity :total :return :all-old})
+                (h/delete-item! creds table item
+                                {:capacity :total :return :all-old})
                 <?
                 meta
                 :capacity
                 :table)))))))
 
 (deftest delete+expected-expr
-  (with-local-dynamo! {create-table-default [(assoc item :age 33 :hobby "Strolling")]}
+  (with-local-dynamo! {create-table-default
+                       [(assoc item :age 33 :hobby "Strolling")]}
     (fn [creds]
       (go-catching
         (is (empty?
@@ -119,26 +126,15 @@
                      [:begins-with [:hobby] "St"]
                      [:begins-with [:hobby] "Tro"]]]}))))))))
 
-;; long story
-#? (:clj
-    (defmacro update-test [attrs-in updates attrs-out & [ctx]]
-      (let [keyed-item (merge item attrs-in)
-            exp        (merge item attrs-out)]
-        (if (:ns &env)
-          `(with-local-dynamo! ~{create-table-default [keyed-item]}
-             (fn [creds#]
-               (go-catching
-                 (is
-                  (= ~exp
-                     (<?
-                      (h/update-item!
-                       creds# ~table ~item ~updates {:return :all-new})))))))
-          `(with-local-dynamo! ~{create-table-default [keyed-item]}
-             (fn [creds#]
-               (go-catching
-                 (is (= ~exp
-                        (<? (h/update-item!
-                             creds# ~table ~item ~updates {:return :all-new})))))))))))
+(defn update-test [attrs-in updates attrs-out]
+  (let [keyed-item (merge item attrs-in)
+        exp        (merge item attrs-out)]
+    (with-local-dynamo! {create-table-default [keyed-item]}
+      (fn [creds]
+        (go-catching
+          (is (= exp
+                 (<? (h/update-item!
+                      creds table item updates {:return :all-new})))))))))
 
 (deftest update-item
   (update-test

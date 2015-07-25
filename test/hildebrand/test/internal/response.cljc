@@ -48,7 +48,6 @@
          (restructure-response
           :get-item {:item {:name {:S "Joseph"}}}))))
 
-
 (deftest batch-get-item
   (is (= {:hildebrand-test-table [{:name "Moe"}]}
          (restructure-response

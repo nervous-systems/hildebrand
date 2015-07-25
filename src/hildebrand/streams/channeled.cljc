@@ -24,8 +24,9 @@
    extra
    (assoc batch-opts :limit limit :start-key-name :exclusive-start-shard-id)))
 
-(defn get-records! [creds stream-arn shard-id iterator-type {:keys [limit sequence-number]}
-                    & [{:keys [chan]}]]
+(defn get-records! [creds stream-arn shard-id iterator-type
+                    {:keys [limit sequence-number]}
+                    & [{:keys [chan close?] :or {close? true}}]]
   (assert (or limit chan)
           "Please supply either a page-size (limit) or output channel")
   (let [chan (or chan (async/chan limit))]
@@ -40,8 +41,10 @@
                   iterator (-> records meta :next-shard-iterator)]
               (if (and (<? (onto-chan? chan records)) iterator)
                 (recur iterator)
-                (async/close! chan))))
+                (when close?
+                  (async/close! chan)))))
           (catch #? (:clj Exception :cljs js/Error) e
-            (async/>! chan e)
-            (async/close! chan)))))
+                 (async/>! chan e)
+                 (when close?
+                   (async/close! chan))))))
     chan))

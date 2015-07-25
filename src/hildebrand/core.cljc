@@ -91,20 +91,25 @@ delete." )
 
 #? (:clj (def ensure-table!! (comp g/<?! ensure-table!)))
 
-(defn scan-count! [creds table & [extra]]
-  (go-catching
-    (-> (scan! creds table (assoc extra :select :count))
-        <?
-        meta
-        :count)))
+(defn scan-count! [creds table & [extra {:keys [chan close?] :or {close? true}}]]
+  (cond->
+      (go-catching
+        (-> (scan! creds table (assoc extra :select :count))
+            <?
+            meta
+            :count))
+    chan (async/pipe chan close?)))
 
 #? (:clj (def scan-count!! (comp g/<?! scan-count!)))
 
-(defn query-count! [creds table where & [extra]]
-  (go-catching
-    (-> (query! creds table where (assoc extra :select :count))
-        <?
-        meta
-        :count)))
+(defn query-count! [creds table where
+                    & [extra {:keys [chan close?] :or {close? true}}]]
+  (cond->
+      (go-catching
+        (-> (query! creds table where (assoc extra :select :count))
+            <?
+            meta
+            :count))
+    chan (async/pipe chan close?)))
 
 #? (:clj (def query-count!! (comp g/<?! query-count!)))

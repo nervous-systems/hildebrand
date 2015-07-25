@@ -28,9 +28,12 @@
 (defissuer get-shard-iterator [stream-arn shard-id shard-iterator-type])
 (defissuer list-streams       [])
 
-(defn latest-stream-arn! [creds table & args]
-  (go-catching
-    (-> (apply hildebrand/describe-table! creds table args)
-        <?
-        :latest-stream-arn)))
+(defn latest-stream-arn! [creds table
+                          & [args {:keys [chan close?] :or {close? true}}]]
+  (cond->
+      (go-catching
+        (-> (apply hildebrand/describe-table! creds table args)
+            <?
+            :latest-stream-arn))
+    chan (async/pipe chan close?)))
 #? (:clj (def latest-stream-arn!! (comp g/<?! latest-stream-arn!)))
