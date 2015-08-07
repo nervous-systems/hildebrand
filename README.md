@@ -8,7 +8,7 @@ built on top of [Eulalie](https://github.com/nervous-systems/eulalie).
 
  - [core.async](https://github.com/clojure/core.async)-based API
  - Targets both Clojure and Clojurescript/Node
- - Survives the [Google Closure compiler's](https://developers.google.com/closure/compiler/) `:advanced` optimizations
+ - Survives the [Google Closure compiler's](https://developers.google.com/closure/compiler/) `:advanced` optimizations, for e.g. [Clojurescript AWS Lambda functions](https://github.com/nervous-systems/cljs-lambda)
  - Exposes advanced Dynamo features, including the [Dynamo Streams](https://github.com/nervous-systems/hildebrand/wiki/hildebrand.streams.channeled#get-records) service
  - Plain EDN representations of Dynamo tables, items, queries, and their components: [conditional writes](https://github.com/nervous-systems/hildebrand/wiki/Conditional-Operations), [atomic updates](https://github.com/nervous-systems/hildebrand/wiki/hildebrand.core#examples-4), [filters](https://github.com/nervous-systems/hildebrand/wiki/hildebrand.channeled#examples), and so on.
 
