@@ -1,4 +1,4 @@
-(defproject io.nervous/hildebrand "0.4.1"
+(defproject io.nervous/hildebrand "0.4.2"
   :description "High-level, asynchronous AWS client library"
   :url "https://github.com/nervous-systems/hildebrand"
   :license {:name "Unlicense" :url "http://unlicense.org/UNLICENSE"}
@@ -13,9 +13,7 @@
   :dependencies
   [[org.clojure/clojure        "1.7.0"]
    [org.clojure/clojurescript  "0.0-3308"]
-   [org.clojure/core.async     "0.1.346.0-17112a-alpha"]
-   [io.nervous/eulalie         "0.6.1"]
-   [io.nervous/glossop         "0.2.0"]
+   [io.nervous/eulalie         "0.6.3"]
    [prismatic/plumbing         "0.4.1"]]
   :exclusions [[org.clojure/clojure]]
   :node-dependencies [[bignumber.js "2.0.7"]]
@@ -29,7 +27,6 @@
                         :source-map true}}
             {:id "test-none"
              :source-paths ["src" "test"]
-             :notify-command ["node" "target/test-none/hildebrand-test.js"]
              :compiler {:output-to "target/test-none/hildebrand-test.js"
                         :output-dir "target/test-none"
                         :target :nodejs
