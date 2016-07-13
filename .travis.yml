@@ -1,12 +1,13 @@
 language: clojure
 lein: lein2
 before_install:
-    - wget http://dynamodb-local.s3-website-us-west-2.amazonaws.com/dynamodb_local_latest.tar.gz
-    - tar xzf dynamodb_local_latest.tar.gz
-    - java -jar DynamoDBLocal.jar &
-script: lein2 test hildebrand.test.core hildebrand.test.channeled hildebrand.test.internal.request hildebrand.test.streams hildebrand.test.streams.channeled hildebrand.test.internal.response
+- wget http://dynamodb-local.s3-website-us-west-2.amazonaws.com/dynamodb_local_latest.tar.gz
+- tar xzf dynamodb_local_latest.tar.gz
+- java -jar DynamoDBLocal.jar &
+script: lein2 test hildebrand.test.core hildebrand.test.channeled hildebrand.test.internal.request
+  hildebrand.test.streams hildebrand.test.streams.channeled hildebrand.test.internal.response
 env:
-    global:
-        - LOCAL_DYNAMO_URL=http://localhost:8000
-        - secure: "Xt7aKxjrquevFJ8kYGjAWdeD+Ogdf/0zbQYx/nWV0Rm5lsHk4s7K4qe6gIm7MUlp4dLQlXZHobK+9KVKxgbecL+uVU6M2fgl0X1F/yY15EhcxOCuQbpaE156G0Z1p66Wo0swRW9F5GBsSu38xCceVeTyyGLNBM3eDfuUbIs5Yfg="
-        - secure: "UN5LxS50WOf37+ETmD/ps2noO+KsLj6jKVAK7oOadw+s7LgjTzulZznDJhjx5DplkcvNIyCHhpx9Yr9hotXikXi/OEQ6VNQZ/mgV1biyCKHQgPFrYHKyB910Udb0Ry0k+8C46NL0IZTD+0AL6X8MNo4Bj9v8Q2WyB70MP5kmxpc="
+  global:
+  - LOCAL_DYNAMO_URL=http://localhost:8000
+  - secure: JyBnDXd3pqdxRanGwFUbHyx7D+3R8TOHxY2TK6gNEIlYw7qRUfdyXJiGaSJenJ6U8ajnFjA1xKViIrM/z5TbmqPxgsFpI7UswXP0mT8oSjbvqhql8DQ+vZG83coH/pnlXP1BBDWfC2+9fB7tgU6AnwmUvmjke2ykzwXWTpodtdE=
+  - secure: O7UU+KjyV1rz8StBm9ceRjezroHQPyGNMqb2l1RhebZNnCpALzFfDxU0F8kY0ZVlnDAfgWG1kKb5SOuzNI5FD3XPj7LjHrTS+pkFDLnmRKOmXJOEJgbFOIZRQ7iaKRuyN11Aij5DZRkKnehc2YK1YrEL41m19qukqghqBr7Ah2I=
