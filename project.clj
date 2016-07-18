@@ -1,4 +1,4 @@
-(defproject io.nervous/hildebrand "0.4.3"
+(defproject io.nervous/hildebrand "0.4.4"
   :description "High-level, asynchronous AWS client library"
   :url "https://github.com/nervous-systems/hildebrand"
   :license {:name "Unlicense" :url "http://unlicense.org/UNLICENSE"}
@@ -11,9 +11,9 @@
   :plugins [[lein-cljsbuild "1.0.6"]
             [lein-npm "0.5.0"]]
   :dependencies
-  [[org.clojure/clojure        "1.7.0"]
-   [org.clojure/clojurescript  "0.0-3308"]
-   [io.nervous/eulalie         "0.6.4"]
+  [[org.clojure/clojure        "1.8.0"]
+   [org.clojure/clojurescript  "1.8.51"]
+   [io.nervous/eulalie         "0.6.8"]
    [prismatic/plumbing         "0.4.1"]]
   :exclusions [org.clojure/clojure]
   :node-dependencies [[bignumber.js "2.0.7"]]

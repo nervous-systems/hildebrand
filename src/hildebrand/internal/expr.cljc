@@ -152,6 +152,7 @@
   (str "set "
        (str/join ", "
                  (for [op ops :let [[_ col+path arg] (op->vector op)]]
+                   ;; Intense hack
                    (str col+path " = " arg)))))
 
 (defn ops->string [by-op]
