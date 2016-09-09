@@ -10,27 +10,27 @@
   #? (:cljs
       (:require-macros [plumbing.core :refer [for-map map-vals]])))
 
-(defn to-set-attr [v]
-  (let [v (throw-empty v)]
-    (cond
-      (every? stringy?    v)  {:SS (map name           v)}
-      (every? ddb-num?    v)  {:NS (map str            v)}
-      (every? byte-array? v)  {:BS (map ba->b64-string v)}
-      :else (assert false "Invalid set type"))))
-
-(declare to-attr-value)
-
-(defn item-key [k]
+(defn namespaced-name [k]
   (if (and (keyword? k) (namespace k))
     (str (namespace k) "/" (name k))
     (name k)))
 
+(defn to-set-attr [v]
+  (let [v (throw-empty v)]
+    (cond
+      (every? stringy?    v)  {:SS (map namespaced-name v)}
+      (every? ddb-num?    v)  {:NS (map str             v)}
+      (every? byte-array? v)  {:BS (map ba->b64-string  v)}
+      :else (assert false "Invalid set type"))))
+
+(declare to-attr-value)
+
 (defn ->item [m]
   (for-map [[k v] m]
-    (item-key k) (to-attr-value v)))
+    (namespaced-name k) (to-attr-value v)))
 
 (defn to-attr-value [v]
-  (let [v (cond-> v (keyword? v) name)]
+  (let [v (cond-> v (keyword? v) namespaced-name)]
     (cond
       (string?     v) {:S (throw-empty v)}
       (nil?        v) {:NULL true}
@@ -52,13 +52,13 @@
          :comparison-operator  (comparison-ops op op)}))
 
 (defn ->attr-value [[k v]]
-  {:attribute-name (name k)
+  {:attribute-name (namespaced-name k)
    :attribute-type (type-aliases-out v v)})
 
 (defn lift-projection-expression [m k v]
   (if (not-empty v)
     (let [alias->col (for-map [col v]
-                       (str "#" (name (gensym))) col)]
+                       (str "#" (namespaced-name (gensym))) col)]
       (assoc m
              :expression-attribute-names alias->col
              :projection-expression (keys alias->col)))
@@ -110,7 +110,7 @@
 (defn ->keys [v]
   (map
    (fn [t attr]
-     {:attribute-name (name attr)
+     {:attribute-name (namespaced-name attr)
       :key-type t})
    [:hash :range] v))
 

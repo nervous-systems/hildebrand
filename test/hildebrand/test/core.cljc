@@ -5,6 +5,7 @@
             [glossop.core #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
             [hildebrand.test.common :as test.common
              :refer [table create-table-default creds
+                     namespaced-table create-table-namespaced
                      with-local-dynamo! with-remote-dynamo!]]
             [#? (:clj clojure.core.async :cljs cljs.core.async) :as async]
             [hildebrand.test.util
@@ -38,6 +39,8 @@
 
 (def item {:name "Mephistopheles"})
 
+(def namespaced-item {:namespaced/name "Mephistopheles"})
+
 (deftest list-tables
   (with-local-dynamo!
     (fn [creds]
@@ -63,12 +66,11 @@
                        {:chan (async/chan 1 (map :age))}))))))))
 
 (deftest namespaced-put+get
-  (with-local-dynamo!
-    (fn [creds]
-      (let [val (assoc item :namespaced.keyword/age 33)]
+  (let [val (assoc namespaced-item :namespaced/age 33)]
+    (with-local-dynamo! {create-table-namespaced [val]}
+      (fn [creds]
         (go-catching
-         (is (empty? (<? (h/put-item! creds table val))))
-         (is (= val (<? (h/get-item! creds table item {:consistent true})))))))))
+         (is (= val (<? (h/get-item! creds namespaced-table namespaced-item {:consistent true})))))))))
 
 (deftest put+conditional
   (with-local-dynamo! {create-table-default [item]}
