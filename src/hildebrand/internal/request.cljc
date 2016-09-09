@@ -20,9 +20,14 @@
 
 (declare to-attr-value)
 
+(defn item-key [k]
+  (if (and (keyword? k) (namespace k))
+    (str (namespace k) "/" (name k))
+    (name k)))
+
 (defn ->item [m]
   (for-map [[k v] m]
-    (name k) (to-attr-value v)))
+    (item-key k) (to-attr-value v)))
 
 (defn to-attr-value [v]
   (let [v (cond-> v (keyword? v) name)]

@@ -62,6 +62,14 @@
                        {:consistent true}
                        {:chan (async/chan 1 (map :age))}))))))))
 
+(deftest namespaced-put+get
+  (with-local-dynamo!
+    (fn [creds]
+      (let [val (assoc item :namespaced.keyword/age 33)]
+        (go-catching
+         (is (empty? (<? (h/put-item! creds table val))))
+         (is (= val (<? (h/get-item! creds table item {:consistent true})))))))))
+
 (deftest put+conditional
   (with-local-dynamo! {create-table-default [item]}
     (fn [creds]
