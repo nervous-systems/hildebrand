@@ -28,7 +28,7 @@
       (let [in #? (:clj
                    (.getBytes "\u00a5123Hello" "utf8")
                    :cljs
-                   (js/Buffer "\u00a5123Hello" "utf8"))]
+                   (js/Buffer. "\u00a5123Hello" "utf8"))]
         (go-catching
           (<? (h/put-item! creds table {:name "binary-roundtrip" :attr in}))
           (is (= (ba->seq in)
