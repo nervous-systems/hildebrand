@@ -33,11 +33,19 @@
 
 (def table :hildebrand-test-table)
 
+(def namespaced-table :hildebrand-namespaced-test-table)
+
 (def create-table-default
   {:table table
    :throughput {:read 1 :write 1}
    :attrs {:name :string}
    :keys  [:name]})
+
+(def create-table-namespaced
+  {:table namespaced-table
+   :throughput {:read 1 :write 1}
+   :attrs {:namespaced/name :string}
+   :keys  [:namespaced/name]})
 
 (def indexed-table :hildebrand-test-table-indexed)
 (def local-index   :hildebrand-test-table-indexed-local)
