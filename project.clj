@@ -4,16 +4,11 @@
   :license {:name "Unlicense" :url "http://unlicense.org/UNLICENSE"}
   :scm {:name "git" :url "https://github.com/nervous-systems/hildebrand"}
   :source-paths ["src"]
-  :plugins [[lein-cljsbuild "1.1.4"]
-            [lein-npm "0.6.2"]]
-  :dependencies
-  [[org.clojure/clojure        "1.8.0"]
-   [org.clojure/clojurescript  "1.9.293"]
-   [prismatic/schema           "1.1.3"]
-   [prismatic/plumbing         "0.5.3" :exclusions [prismatic/schema]]
-   [io.nervous/eulalie         "0.6.9" :exclusions [prismatic/plumbing
-                                                    org.clojure/clojurescript]]]
+  :dependencies [[org.clojure/clojure "1.8.0"]
+                 [io.nervous/eulalie  "0.6.10"]]
   :npm {:dependencies [[bignumber.js "2.4.0"]]}
+  :plugins [[lein-cljsbuild "1.1.4"]
+            [lein-npm       "0.6.2"]]
   :cljsbuild
   {:builds [{:id "main"
              :source-paths ["src"]
