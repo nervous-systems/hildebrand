@@ -8,15 +8,16 @@
   :global-vars {*warn-on-reflection* true
                 *print-meta* true}
   :source-paths ["src"]
-  :plugins [[lein-cljsbuild "1.0.6"]
-            [lein-npm "0.5.0"]]
+  :plugins [[lein-cljsbuild "1.1.4"]
+            [lein-npm "0.6.2"]]
   :dependencies
   [[org.clojure/clojure        "1.8.0"]
-   [org.clojure/clojurescript  "1.8.51"]
-   [io.nervous/eulalie         "0.6.8"]
-   [prismatic/plumbing         "0.4.1"]]
+   [org.clojure/clojurescript  "1.9.293"]
+   [prismatic/schema           "1.1.3"]
+   [prismatic/plumbing         "0.5.3" :exclusions [prismatic/schema]]
+   [io.nervous/eulalie         "0.6.8" :exclusions [prismatic/plumbing]]]
   :exclusions [org.clojure/clojure]
-  :node-dependencies [[bignumber.js "2.0.7"]]
+  :npm {:dependencies [[bignumber.js "2.4.0"]]}
   :cljsbuild
   {:builds [{:id "main"
              :source-paths ["src"]
