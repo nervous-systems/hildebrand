@@ -22,6 +22,3 @@
     (if (and (= -1 (.indexOf s ".")) (<= (.precision v) 15))
       (js/parseInt s)
       v)))
-
-(defn boolean? [x]
-  (= (type x) (type true)))
