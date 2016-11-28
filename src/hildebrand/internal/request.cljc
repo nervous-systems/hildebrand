@@ -3,7 +3,7 @@
             [clojure.set :as set]
             [eulalie.platform :refer [byte-array? ba->b64-string]]
             [hildebrand.internal.expr :as expr]
-            [hildebrand.internal.platform.number :refer [boolean? ddb-num?]]
+            [hildebrand.internal.platform.number :as number :refer [ddb-num?]]
             [hildebrand.internal.util
              :refer [type-aliases-out throw-empty defmulti-dispatch]]
             [plumbing.core :refer [map-vals #?@ (:clj [for-map])]])
@@ -32,14 +32,14 @@
 (defn to-attr-value [v]
   (let [v (cond-> v (keyword? v) namespaced-name)]
     (cond
-      (string?     v) {:S (throw-empty v)}
-      (nil?        v) {:NULL true}
-      (boolean?    v) {:BOOL v}
-      (ddb-num?    v) {:N (str v)}
-      (vector?     v) {:L (map to-attr-value v)}
-      (map?        v) {:M (->item v)}
-      (byte-array? v) {:B (ba->b64-string v)}
-      (set?        v) (to-set-attr v)
+      (string?         v) {:S (throw-empty v)}
+      (nil?            v) {:NULL true}
+      (number/boolean? v) {:BOOL v}
+      (ddb-num?        v) {:N (str v)}
+      (vector?         v) {:L (map to-attr-value v)}
+      (map?            v) {:M (->item v)}
+      (byte-array?     v) {:B (ba->b64-string v)}
+      (set?            v) (to-set-attr v)
 
       (expr/hildebrand-literal? v) v
       :else (assert false (str "Invalid value " (type v))))))

@@ -1,5 +1,6 @@
 (ns hildebrand.internal.platform.number
-  (:require [cljs.nodejs :as nodejs]))
+  (:require [cljs.nodejs :as nodejs])
+  (:refer-clojure :exclude [boolean?]))
 
 (def BigNumber (nodejs/require "bignumber.js"))
 
@@ -22,3 +23,6 @@
     (if (and (= -1 (.indexOf s ".")) (<= (.precision v) 15))
       (js/parseInt s)
       v)))
+
+(defn boolean? [x]
+  (= (type x) (type true)))
