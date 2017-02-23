@@ -1,14 +1,12 @@
 (ns hildebrand.internal.request
   (:require [glossop.misc :refer [stringy?]]
             [clojure.set :as set]
-            [eulalie.platform :refer [byte-array? ba->b64-string]]
+            #?@(:clj [[clojure.core.async :as async]]
+                :cljs [[cljs.core.async :as async]])
+            ;; [eulalie.platform :refer [byte-array? ba->b64-string]]
             [hildebrand.internal.expr :as expr]
             [hildebrand.internal.platform.number :as number :refer [ddb-num?]]
-            [hildebrand.internal.util
-             :refer [type-aliases-out throw-empty defmulti-dispatch]]
-            [plumbing.core :refer [map-vals #?@ (:clj [for-map])]])
-  #? (:cljs
-      (:require-macros [plumbing.core :refer [for-map map-vals]])))
+            [hildebrand.internal.util :as util]))
 
 (defn namespaced-name [k]
   (if (and (keyword? k) (namespace k))
@@ -16,29 +14,31 @@
     (name k)))
 
 (defn to-set-attr [v]
-  (let [v (throw-empty v)]
+  (let [v (util/throw-empty v)]
     (cond
       (every? stringy?    v)  {:SS (map namespaced-name v)}
       (every? ddb-num?    v)  {:NS (map str             v)}
-      (every? byte-array? v)  {:BS (map ba->b64-string  v)}
+      ;; (every? byte-array? v)  {:BS (map ba->b64-string  v)}
       :else (assert false "Invalid set type"))))
 
 (declare to-attr-value)
 
 (defn ->item [m]
-  (for-map [[k v] m]
-    (namespaced-name k) (to-attr-value v)))
+  (reduce (fn [acc [k v]]
+            (merge acc {(namespaced-name k) (to-attr-value v)}))
+          {}
+          m))
 
 (defn to-attr-value [v]
   (let [v (cond-> v (keyword? v) namespaced-name)]
     (cond
-      (string?         v) {:S (throw-empty v)}
+      (string?         v) {:S (util/throw-empty v)}
       (nil?            v) {:NULL true}
       (number/boolean? v) {:BOOL v}
       (ddb-num?        v) {:N (str v)}
       (vector?         v) {:L (map to-attr-value v)}
       (map?            v) {:M (->item v)}
-      (byte-array?     v) {:B (ba->b64-string v)}
+      ;; (byte-array?     v) {:B (ba->b64-string v)}
       (set?            v) (to-set-attr v)
 
       (expr/hildebrand-literal? v) v
@@ -47,25 +47,29 @@
 (def comparison-ops {:< :lt :<= :le := :eq :> :gt :>= :ge :begins-with :begins_with})
 
 (defn ->key-conds [conds]
-  (for-map [[col [op & args]] conds]
-    col {:attribute-value-list (map to-attr-value args)
-         :comparison-operator  (comparison-ops op op)}))
+  (reduce (fn [acc [col [op & args]]]
+            (merge acc {col {:attribute-value-list (map to-attr-value args)
+                             :comparison-operator  (comparison-ops op op)}}))
+          {}
+          conds))
 
 (defn ->attr-value [[k v]]
   {:attribute-name (namespaced-name k)
-   :attribute-type (type-aliases-out v v)})
+   :attribute-type (util/type-aliases-out v v)})
 
 (defn lift-projection-expression [m k v]
   (if (not-empty v)
-    (let [alias->col (for-map [col v]
-                       (str "#" (namespaced-name (gensym))) col)]
+    (let [alias->col (reduce (fn [acc col]
+                               (merge acc {(str "#" (namespaced-name (gensym))) col}))
+                             {}
+                             v)]
       (assoc m
              :expression-attribute-names alias->col
              :projection-expression (keys alias->col)))
     m))
 
 (defn lift-expression [req v out-key]
-  (if-let [{:keys [expr values attrs]} (map-vals not-empty v)]
+  (if-let [{:keys [expr values attrs]} (util/map-vals not-empty v)]
     (cond-> req
       values (update :expression-attribute-values merge (->item values))
       attrs  (update :expression-attribute-names  merge attrs)
@@ -171,15 +175,17 @@
 
 (defmethod transform-request-kv :items [m k v target]
   (assoc m :request-items
-         (for-map [[t req] v]
-           t (restructure-request :get-item req))))
+         (reduce (fn [acc [t req]]
+                   (merge acc {t (restructure-request :get-item req)}))
+                 {}
+                 v)))
 
 (defmethod transform-request-kv :filter [m k v target]
   (lift-condition-expression
    m k v {:out-key :filter-expression}))
 
-(defmulti-dispatch transform-request-kv
-  (map-vals
+(util/defmulti-dispatch transform-request-kv
+  (util/map-vals
    (fn [handler]
      (fn [m k v _] (handler m k v)))
    {:delete  lift-batch-ops
@@ -188,8 +194,8 @@
     :when    lift-condition-expression
     :update  lift-update-expression}))
 
-(defmulti-dispatch transform-request-kv
-  (map-vals
+(util/defmulti-dispatch transform-request-kv
+  (util/map-vals
    (fn [handler]
      (fn [m k v _] (assoc m k (handler v))))
    {:where ->key-conds
@@ -197,4 +203,3 @@
     :key   ->item
     :throughput ->throughput
     :sort (partial = :asc)}))
-

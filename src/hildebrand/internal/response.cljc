@@ -1,31 +1,30 @@
 (ns hildebrand.internal.response
   (:require [clojure.set :as set]
             [clojure.walk :as walk]
-            [eulalie.platform :refer [b64-string->ba]]
-            [hildebrand.internal.util :refer [type-aliases-in defmulti-dispatch]]
-            [hildebrand.internal.platform.number :refer [string->number]]
-            [plumbing.core :refer [map-vals #?@ (:clj [fn-> fn->> for-map])]])
-  #? (:cljs (:require-macros [plumbing.core :refer [fn-> fn->> for-map]])))
+            ;; [eulalie.platform :refer [b64-string->ba]]
+            [hildebrand.internal.util :as util]
+            [hildebrand.internal.platform.number :refer [string->number]]))
 
 (defn from-attr-value [m]
   (let [[[tag value]] (seq m)]
     (case tag
       :S    value
       :N    (string->number value)
-      :M    (map-vals from-attr-value value)
+      :M    (util/map-vals from-attr-value value)
       :L    (mapv     from-attr-value value)
       :BOOL (boolean value)
       :NULL nil
       :SS   (into #{} (map keyword value))
       :NS   (into #{} (map string->number value))
-      :BS   (into #{} (map b64-string->ba value))
-      :B    (b64-string->ba value))))
+      ;; :BS   (into #{} (map b64-string->ba value)) ;; TODO
+      ;; :B    (b64-string->ba value)
+      )))
 
 (defn ->attr-def [{:keys [attribute-name attribute-type]}]
-  [attribute-name (type-aliases-in attribute-type attribute-type)])
+  [attribute-name (util/type-aliases-in attribute-type attribute-type)])
 
-(def ->key-schema
-  (fn->> (sort-by :key-type) (map :attribute-name)))
+(defn ->key-schema [k]
+  (->> k (sort-by :key-type) (map :attribute-name)))
 
 (def ->throughput
   #(set/rename-keys
@@ -49,14 +48,15 @@
    :projection :project
    :provisioned-throughput :throughput})
 
-(def ->global-index
-  (fn->
-   (update :key-schema ->key-schema)
-   (update :projection ->projection)
-   (update :provisioned-throughput ->throughput)
-   (set/rename-keys index-renames)))
+(defn ->global-index [index]
+  (-> index
+      (update :key-schema ->key-schema)
+      (update :projection ->projection)
+      (update :provisioned-throughput ->throughput)
+      (set/rename-keys index-renames)))
 
-(def ->local-index (fn-> ->global-index (dissoc :throughput)))
+(defn ->local-index [index]
+  (-> index ->global-index (dissoc :throughput)))
 
 (def table-description-renames
   {:table-name :table
@@ -72,8 +72,8 @@
 (defmethod transform-table-kv :default [m k v]
   (assoc m k v))
 
-(defmulti-dispatch transform-table-kv
-  (map-vals
+(util/defmulti-dispatch transform-table-kv
+  (util/map-vals
    (fn [handler]
      (fn [m k v] (assoc m k (handler v))))
    {:attribute-definitions #(into {} (map ->attr-def %))
@@ -111,7 +111,7 @@
                :table-name     :table}
               v)))
 
-(def ->item (partial map-vals from-attr-value))
+(def ->item (partial util/map-vals from-attr-value))
 
 (derive :hildebrand.response-key/items      :hildebrand.response-key/item)
 (derive :hildebrand.response-key/attributes :hildebrand.response-key/item)
@@ -155,8 +155,10 @@
 (defmethod restructure-response* :hildebrand.response/batch-get-item
   [_ {:keys [unprocessed responses] :as m}]
   (let [result (with-meta
-                 (for-map [[t items] responses]
-                   t (map ->item items))
+                 (reduce (fn [acc [t items]]
+                           (merge acc {t (map ->item items)}))
+                         {}
+                         responses)
                  m)]
     (or (maybe-unprocessed-error unprocessed result)
         result)))
@@ -183,3 +185,10 @@
     (restructure-response*
      target
      (set/rename-keys m renames))))
+
+(defn restructure-response* [target body]
+  (let [resp (restructure-response target body)]
+    (if (and (map? resp) (:hildebrand/error resp))
+      (let [{{:keys [type] :as error} :hildebrand/error} resp]
+        (ex-info (name type) error))
+      resp)))

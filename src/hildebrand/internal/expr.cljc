@@ -2,10 +2,7 @@
   (:require [clojure.string :as str]
             [clojure.walk :as walk]
             [glossop.misc :refer [stringy?]]
-            [hildebrand.internal.util :as util]
-            [plumbing.core :refer
-             [dissoc-in #?@ (:clj [memoized-fn fn->> for-map])]])
-  #? (:cljs (:require-macros [plumbing.core :refer [memoized-fn fn->> for-map]])))
+            [hildebrand.internal.util :as util]))
 
 (defn ->hildebrand-literal [x]
   (with-meta x (assoc (meta x) :hildebrand/literal true)))
@@ -123,7 +120,7 @@
     (-> op (new-op-name :append) (rewrite-op params))))
 
 (defmethod rewrite-op :remove [{:keys [arg] :as op} params]
-  [(assoc op :arg :hildebrand/no-arg) (dissoc-in params [:values arg])])
+  [(assoc op :arg :hildebrand/no-arg) (util/dissoc-in params [:values arg])])
 
 (defn parameterize-ops [ops segment->alias]
   (let [[ops param-maps]
@@ -145,9 +142,9 @@
   col+path)
 
 (defmulti  op-group->string (fn [op-name ops] op-name))
-(defmethod op-group->string :default [op-name ops]
-  (str (name op-name) " "
-       (str/join ", " (map (fn->> op->vector (op->string op-name)) ops))))
+#_(defmethod op-group->string :default [op-name ops]
+    (str (name op-name) " "
+         (str/join ", " (map (fn->> op->vector (op->string op-name)) ops))))
 (defmethod op-group->string :set [op-name ops]
   (str "set "
        (str/join ", "
@@ -165,7 +162,7 @@
   (let [[ops {:keys [attrs values] :as params}]
         (-> m
             flatten-update-ops
-            (parameterize-ops (memoized-fn _ [_] (str "#" (gensym)))))
+            #_(parameterize-ops (macros/memoized-fn _ [_] (str "#" (gensym)))))
         ops (group-by :op-name ops)]
     (assoc params :expr (ops->string ops))))
 
@@ -240,10 +237,10 @@
   (group x (name op) (group (arglist xs))))
 (defmethod cond-expr-op->string :not [[op arg]]
   (group 'not arg))
-(util/defmulti-dispatch cond-expr-op->string
-  (for-map [[in-op out-op] prefix-ops]
-    in-op (fn [[_ & args]]
-            (str (name out-op) (group (arglist args))))))
+#_(util/defmulti-dispatch cond-expr-op->string
+    (for-map [[in-op out-op] prefix-ops]
+             in-op (fn [[_ & args]]
+                     (str (name out-op) (group (arglist args))))))
 
 (defn cond-expr->string [expr]
   (walk/postwalk
@@ -253,8 +250,8 @@
    expr))
 
 (defn cond-expr->statement [expr]
-  (let [{:keys [op-name args values attrs] :as params}
-        (parameterize-expr expr (memoized-fn _ [_] (str "#" (gensym))))]
+  (let [{:keys [op-name args values attrs] :as params} nil
+        #_(parameterize-expr expr (macros/memoized-fn _ [_] (str "#" (gensym))))]
     {:attrs  attrs
      :values values
      :expr   (cond-expr->string (into [op-name] args))}))

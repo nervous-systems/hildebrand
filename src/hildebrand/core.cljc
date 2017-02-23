@@ -1,61 +1,59 @@
 (ns hildebrand.core
-  (:require
-   [hildebrand.internal]
-   [hildebrand.internal.request]
-   [hildebrand.internal.response]
-   [hildebrand.internal #? (:clj :refer :cljs :refer-macros) [defissuer]]
-   [glossop.core :as g
-    #? (:clj :refer :cljs :refer-macros) [go-catching <?]]
-   #?@ (:clj
-        [[clojure.core.async :as async]]
-        :cljs
-        [[cljs.core.async :as async]
-         [cljs.reader :as reader]
-         [hildebrand.internal.expr :as expr]])))
+  (:require [hildebrand.internal]
+            [hildebrand.internal.request]
+            [hildebrand.internal.response]
+            [hildebrand.internal.util :as util]
+            #?@(:clj [[clojure.core.async :as async]
+                      [hildebrand.internal.macros :refer [<?!]]]
+                :cljs [[cljs.core.async :as async]
+                       [cljs.reader :as reader]
+                       [hildebrand.internal.expr :as expr]]))
+  #?(:cljs (:require-macros [hildebrand.internal.macros
+                             :refer [defissuer-dynamo go-catching <?]])))
 
 #? (:cljs
     (do
       (reader/register-tag-parser! "hildebrand/path"    expr/path-reader)
       (reader/register-tag-parser! "hildebrand/literal" expr/literal-reader)))
 
-(defissuer get-item [table key]
+(defissuer-dynamo get-item [table key]
   "`key` is a map containing enough keys (either hash, or hash+range) to
 uniquely identify an item in this table/index.")
-(defissuer update-item [table key update]
+(defissuer-dynamo update-item [table key update]
   "`key` is a map containing enough keys (either hash, or hash+range) to
 uniquely identify an item in this table.
 
 `update` is a map of item attribute names to attribute values.
 
 Returns an empty map unless `:return` is set to a reasonable value.")
-(defissuer delete-item [table key]
+(defissuer-dynamo delete-item [table key]
   "`key` is a map containing enough keys (either hash, or hash+range) to
 uniquely identify an item in this table.
 
 Returns an empty map unless `:return` is set to to `:all-old`.")
-(defissuer put-item [table item]
+(defissuer-dynamo put-item [table item]
   "`item` is a map of attribute names to attribute values.
 
 Returns an empty map unless `:return` is set to `:all-old`, and the put
 overwrites an existing item." )
-(defissuer describe-table [table])
-(defissuer update-table   [table]
+(defissuer-dynamo describe-table [table])
+(defissuer-dynamo update-table   [table]
   "`attrs` is a map of attribute names to symbolic types, describing the
 attributes of the table." )
-(defissuer list-tables    [])
-(defissuer create-table   [])
-(defissuer query          [table where]
+(defissuer-dynamo list-tables    [])
+(defissuer-dynamo create-table   [])
+(defissuer-dynamo query          [table where]
   "`where` is a map of keys (either hash, or hash+range) to tagged comparison
  instructions, e.g. `{:hash [:= \"Hello\"] :range [:< 5]}`")
-(defissuer delete-table   [table])
-(defissuer batch-write-item []
+(defissuer-dynamo delete-table   [table])
+(defissuer-dynamo batch-write-item []
   "Accepts `:put` and `:delete` keys, each optionally being set to a map of
 table names to either lists of items to insert, or keys identifying items to
 delete." )
-(defissuer batch-get-item [items]
+(defissuer-dynamo batch-get-item [items]
   "`items` is a map of table names to get requests, each a map containing at
  least `keys`, a list of keys identifying items to retrieve." )
-(defissuer scan [table])
+(defissuer-dynamo scan [table])
 
 (defn table-status! [creds table]
   (go-catching
@@ -66,7 +64,7 @@ delete." )
           (when (not= :resource-not-found (-> e ex-data :type))
             (throw e))))))
 
-#? (:clj (def table-status!! (comp g/<?! table-status!)))
+#? (:clj (def table-status!! (comp <?! table-status!)))
 
 ;; Should probably do something smarter
 (defn await-status! [creds table target-status & [{:keys [timeout] :or {timeout 250}}]]
@@ -79,7 +77,7 @@ delete." )
                       (<? (async/timeout timeout))
                       (recur)))))))
 
-#? (:clj (def await-status!! (comp g/<?! await-status!)))
+#? (:clj (def await-status!! (comp <?! await-status!)))
 
 (defn ensure-table! [creds {:keys [table] :as create}]
   (go-catching
@@ -89,7 +87,7 @@ delete." )
       (when-not (= :active status)
         (<? (await-status! creds table :active))))))
 
-#? (:clj (def ensure-table!! (comp g/<?! ensure-table!)))
+#? (:clj (def ensure-table!! (comp <?! ensure-table!)))
 
 (defn scan-count! [creds table & [extra {:keys [chan close?] :or {close? true}}]]
   (cond->
@@ -100,7 +98,7 @@ delete." )
             :count))
     chan (async/pipe chan close?)))
 
-#? (:clj (def scan-count!! (comp g/<?! scan-count!)))
+#? (:clj (def scan-count!! (comp <?! scan-count!)))
 
 (defn query-count! [creds table where
                     & [extra {:keys [chan close?] :or {close? true}}]]
@@ -112,4 +110,4 @@ delete." )
             :count))
     chan (async/pipe chan close?)))
 
-#? (:clj (def query-count!! (comp g/<?! query-count!)))
+#? (:clj (def query-count!! (comp <?! query-count!)))
