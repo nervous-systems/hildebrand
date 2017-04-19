@@ -18,7 +18,7 @@ built on top of [Eulalie](https://github.com/nervous-systems/eulalie).
 introduction](https://github.com/nervous-systems/hildebrand/wiki/)
 on the wiki is a good place to start.
 - [Introducing Hildebrand](
-https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/08/hildebrand/), a blog
+https://nervous.io/clojure/aws/dynamo/hildebrand/2015/06/01/hildebrand/), a blog
 post, has a bunch of usage examples in it.  The namespace layout has
 changed since (`hildebrand` -> `hildebrand.core`)
 
