@@ -68,6 +68,10 @@
    :item-count :items
    :creation-date-time :created})
 
+(def unprocessed-renames
+  {:put-request :put
+   :delete-request :delete})
+
 (defmulti  transform-table-kv (fn [m k v] k))
 (defmethod transform-table-kv :default [m k v]
   (assoc m k v))
@@ -116,8 +120,15 @@
 (derive :hildebrand.response-key/items      :hildebrand.response-key/item)
 (derive :hildebrand.response-key/attributes :hildebrand.response-key/item)
 
+(derive :hildebrand.response-key/put-request :hildebrand.response-key/request)
+(derive :hildebrand.response-key/delete-request :hildebrand.response-key/request)
+
 (defmethod transform-response-kv :hildebrand.response-key/item [m k v _]
   (assoc m k (if (map? v) (->item v) (map ->item v))))
+
+(defmethod transform-response-kv :hildebrand.response-key/request [m k v _]
+  (let [v (or (:item v) (:key v))]
+    (assoc m k (if (map? v) (->item v) (map ->item v)))))
 
 (defmulti  restructure-response*
   (fn [target m] (keyword "hildebrand.response" (name target))))
@@ -143,7 +154,7 @@
   (with-meta (or items []) (dissoc m :items)))
 
 (defn error [type message & [data]]
-  (assoc data :hildebrand/error {:type type :message message}))
+  {:hildebrand/error (assoc data :type type :message message)})
 
 (defn maybe-unprocessed-error [unprocessed & [result]]
   (when (not-empty unprocessed)
@@ -163,8 +174,14 @@
 
 (defmethod restructure-response* :hildebrand.response/batch-write-item
   [_ {:keys [unprocessed] :as resp}]
-  (or (maybe-unprocessed-error unprocessed)
-      (with-meta {} resp)))
+  (let [result (with-meta
+                 (for-map [[t items] unprocessed]
+                          t (map #(reduce
+                                   (fn [acc [k v]]
+                                     (transform-response-kv acc k v :batch-write-item))
+                                   nil (set/rename-keys % unprocessed-renames)) items))
+                 resp)]
+    result))
 
 (def renames
   {:consumed-capacity :capacity
@@ -183,3 +200,4 @@
     (restructure-response*
      target
      (set/rename-keys m renames))))
+
