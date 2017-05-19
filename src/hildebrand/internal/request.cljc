@@ -23,6 +23,12 @@
       (every? byte-array? v)  {:BS (map ba->b64-string  v)}
       :else (assert false "Invalid set type"))))
 
+(defmulti attr-value-for-type type)
+
+(defmethod attr-value-for-type :default
+  [v]
+  (assert false (str "Invalid value " (type v))))
+
 (declare to-attr-value)
 
 (defn ->item [m]
@@ -42,7 +48,7 @@
       (set?            v) (to-set-attr v)
 
       (expr/hildebrand-literal? v) v
-      :else (assert false (str "Invalid value " (type v))))))
+      :else (attr-value-for-type v))))
 
 (def comparison-ops {:< :lt :<= :le := :eq :> :gt :>= :ge :begins-with :begins_with})
 
