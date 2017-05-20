@@ -167,3 +167,16 @@
          (restructure-request
           :describe-table
           {:table :users}))))
+
+(deftype TestValue [data])
+(defmethod hildebrand.internal.request/attr-value-for-type TestValue
+  [v]
+  {:S (.-data v)})
+
+(deftest extend-to-attr-value
+  (is (= {:table-name :test
+          :key {"test-value" {:S "Bob"}}}
+         (restructure-request
+          :update-item
+          {:table :test
+           :key {:test-value (TestValue. "Bob")}}))))
