@@ -126,7 +126,7 @@
        :else acc))
    nil items))
 
-(defmethod transform-response-kv :hildebrand.response-key/unprocessed [m k v _] 
+(defmethod transform-response-kv :hildebrand.response-key/unprocessed [m k v _]
   (update m k #(merge-with conj % (process-unprocessed v))))
 
 (defmulti  restructure-response*
@@ -173,11 +173,13 @@
 
 (defmethod restructure-response* :hildebrand.response/batch-write-item
   [_ {:keys [unprocessed] :as resp}]
-  ;; need with-meta resp
-  (reduce
-   (fn [acc m]
-     (transform-response-kv acc :unprocessed m :batch-write-item))
-   nil unprocessed)
+  (let [result (with-meta
+                 (reduce
+                  (fn [acc m]
+                    (transform-response-kv acc :unprocessed m :batch-write-item))
+                  nil unprocessed)
+                 resp)]
+    result))
 
 (def renames
   {:consumed-capacity :capacity
