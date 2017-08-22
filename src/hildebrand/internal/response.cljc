@@ -68,10 +68,6 @@
    :item-count :items
    :creation-date-time :created})
 
-(def unprocessed-renames
-  {:put-request :put
-   :delete-request :delete})
-
 (defmulti  transform-table-kv (fn [m k v] k))
 (defmethod transform-table-kv :default [m k v]
   (assoc m k v))
@@ -115,20 +111,23 @@
                :table-name     :table}
               v)))
 
-(def ->item (partial map-vals from-attr-value))
-
 (derive :hildebrand.response-key/items      :hildebrand.response-key/item)
 (derive :hildebrand.response-key/attributes :hildebrand.response-key/item)
-
-(derive :hildebrand.response-key/put-request :hildebrand.response-key/request)
-(derive :hildebrand.response-key/delete-request :hildebrand.response-key/request)
 
 (defmethod transform-response-kv :hildebrand.response-key/item [m k v _]
   (assoc m k (if (map? v) (->item v) (map ->item v))))
 
-(defmethod transform-response-kv :hildebrand.response-key/request [m k v _]
-  (let [v (or (:item v) (:key v))]
-    (assoc m k (if (map? v) (->item v) (map ->item v)))))
+(defn process-unprocessed [[table items]]
+  (reduce
+   (fn [acc i]
+     (cond
+       (:put-request i) (update-in acc [:put table] #(conj % (-> i :put-request :item ->item)))
+       (:delete-request i)  (update-in acc [:delete table] #(conj % (-> i :delete-request :key ->item)))
+       :else acc))
+   nil items))
+
+(defmethod transform-response-kv :hildebrand.response-key/unprocessed [m k v _] 
+  (update m k #(conj % (process-unprocessed v))))
 
 (defmulti  restructure-response*
   (fn [target m] (keyword "hildebrand.response" (name target))))
@@ -174,14 +173,11 @@
 
 (defmethod restructure-response* :hildebrand.response/batch-write-item
   [_ {:keys [unprocessed] :as resp}]
-  (let [result (with-meta
-                 (for-map [[t items] unprocessed]
-                          t (map #(reduce
-                                   (fn [acc [k v]]
-                                     (transform-response-kv acc k v :batch-write-item))
-                                   nil (set/rename-keys % unprocessed-renames)) items))
-                 resp)]
-    result))
+  ;; need with-meta resp
+  (reduce
+   (fn [acc m]
+     (transform-response-kv acc :unprocessed m :batch-write-item))
+   nil unprocessed)
 
 (def renames
   {:consumed-capacity :capacity
@@ -200,4 +196,3 @@
     (restructure-response*
      target
      (set/rename-keys m renames))))
-
