@@ -111,6 +111,8 @@
                :table-name     :table}
               v)))
 
+(def ->item (partial map-vals from-attr-value))
+
 (derive :hildebrand.response-key/items      :hildebrand.response-key/item)
 (derive :hildebrand.response-key/attributes :hildebrand.response-key/item)
 
