@@ -127,7 +127,7 @@
    nil items))
 
 (defmethod transform-response-kv :hildebrand.response-key/unprocessed [m k v _] 
-  (update m k #(conj % (process-unprocessed v))))
+  (update m k #(merge-with conj % (process-unprocessed v))))
 
 (defmulti  restructure-response*
   (fn [target m] (keyword "hildebrand.response" (name target))))
