@@ -119,6 +119,18 @@
 (defmethod transform-response-kv :hildebrand.response-key/item [m k v _]
   (assoc m k (if (map? v) (->item v) (map ->item v))))
 
+(defn process-unprocessed [[table items]]
+  (reduce
+   (fn [acc i]
+     (cond
+       (:put-request i) (update-in acc [:put table] #(conj % (-> i :put-request :item ->item)))
+       (:delete-request i)  (update-in acc [:delete table] #(conj % (-> i :delete-request :key ->item)))
+       :else acc))
+   nil items))
+
+(defmethod transform-response-kv :hildebrand.response-key/unprocessed [m k v _]
+  (update m k #(merge-with conj % (process-unprocessed v))))
+
 (defmulti  restructure-response*
   (fn [target m] (keyword "hildebrand.response" (name target))))
 (defmethod restructure-response* :default [_ m] m)
@@ -143,12 +155,12 @@
   (with-meta (or items []) (dissoc m :items)))
 
 (defn error [type message & [data]]
-  (assoc data :hildebrand/error {:type type :message message}))
+  {:hildebrand/error (assoc data :type type :message message)})
 
 (defn maybe-unprocessed-error [unprocessed & [result]]
   (when (not-empty unprocessed)
     (error :unprocessed-items
-           (str (count unprocessed) "unprocessed items")
+           (str (count unprocessed) " unprocessed items")
            {:unprocessed unprocessed
             :result result})))
 
@@ -163,8 +175,12 @@
 
 (defmethod restructure-response* :hildebrand.response/batch-write-item
   [_ {:keys [unprocessed] :as resp}]
-  (or (maybe-unprocessed-error unprocessed)
-      (with-meta {} resp)))
+  (let [{:keys [unprocessed]} (reduce
+                               (fn [acc m]
+                                 (transform-response-kv acc :unprocessed m :batch-write-item))
+                               nil unprocessed)]
+    (or (maybe-unprocessed-error unprocessed)
+        (with-meta {} resp))))
 
 (def renames
   {:consumed-capacity :capacity
