@@ -160,7 +160,7 @@
 (defn maybe-unprocessed-error [unprocessed & [result]]
   (when (not-empty unprocessed)
     (error :unprocessed-items
-           (str (count unprocessed) "unprocessed items")
+           (str (count unprocessed) " unprocessed items")
            {:unprocessed unprocessed
             :result result})))
 
@@ -175,13 +175,12 @@
 
 (defmethod restructure-response* :hildebrand.response/batch-write-item
   [_ {:keys [unprocessed] :as resp}]
-  (let [result (with-meta
-                 (reduce
-                  (fn [acc m]
-                    (transform-response-kv acc :unprocessed m :batch-write-item))
-                  nil unprocessed)
-                 resp)]
-    result))
+  (let [{:keys [unprocessed]} (reduce
+                               (fn [acc m]
+                                 (transform-response-kv acc :unprocessed m :batch-write-item))
+                               nil unprocessed)]
+    (or (maybe-unprocessed-error unprocessed)
+        (with-meta {} resp))))
 
 (def renames
   {:consumed-capacity :capacity
