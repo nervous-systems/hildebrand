@@ -1,10 +1,10 @@
 language: clojure
-lein: lein2
 before_install:
+- wget https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein && chmod +x lein
 - wget http://dynamodb-local.s3-website-us-west-2.amazonaws.com/dynamodb_local_latest.tar.gz
 - tar xzf dynamodb_local_latest.tar.gz
 - java -jar DynamoDBLocal.jar &
-script: lein2 test hildebrand.test.core hildebrand.test.channeled hildebrand.test.internal.request
+script: ./lein test hildebrand.test.core hildebrand.test.channeled hildebrand.test.internal.request
   hildebrand.test.streams hildebrand.test.streams.channeled hildebrand.test.internal.response
 env:
   global:
